@@ -1,28 +1,21 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect } from "react";
 
 const ThemeContext = createContext(null);
-const STORAGE_KEY = "theme";
 
-function getInitialTheme() {
-  if (typeof window === "undefined") return "dark";
-  const stored = window.localStorage.getItem(STORAGE_KEY);
-  if (stored === "light" || stored === "dark") return stored;
-  const prefersLight = window.matchMedia?.("(prefers-color-scheme: light)").matches;
-  return prefersLight ? "light" : "dark";
-}
+// Igloo-inspired demo direction (P0, CRITICAL REQUIREMENT): light theme is
+// the only presentation mode for the demo. Dark mode's tokens/toggle stay
+// in the codebase (design-system/index.css, ThemeToggle.jsx) for a future
+// pass, but nothing in the demo path can select them anymore -- there is
+// no stored preference and no system-preference branch to fall into dark.
+const DEMO_THEME = "light";
 
 export function ThemeProvider({ children }) {
-  const [theme, setTheme] = useState(getInitialTheme);
-
   useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme);
-    window.localStorage.setItem(STORAGE_KEY, theme);
-  }, [theme]);
-
-  const toggleTheme = () => setTheme((t) => (t === "dark" ? "light" : "dark"));
+    document.documentElement.setAttribute("data-theme", DEMO_THEME);
+  }, []);
 
   return (
-    <ThemeContext.Provider value={{ theme, setTheme, toggleTheme }}>
+    <ThemeContext.Provider value={{ theme: DEMO_THEME }}>
       {children}
     </ThemeContext.Provider>
   );

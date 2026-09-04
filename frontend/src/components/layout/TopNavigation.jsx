@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { NavLink } from "react-router-dom";
-import ThemeToggle from "./ThemeToggle.jsx";
 import { NAV_ITEMS } from "./navItems.js";
 import { useRole, ROLES } from "../../context/RoleContext.jsx";
 import api from "../../api/client.js";
+import Icon, { IconMark, IconSettings } from "../../design-system/icons.jsx";
 
 export default function TopNavigation() {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -41,10 +41,10 @@ export default function TopNavigation() {
   return (
     <header className="topnav-wrap">
       <nav className="topnav">
-        <div className="topnav-brand">
-          <span className="topnav-brand-icon">🧬</span>
-          <span className="topnav-brand-name">PharmaAI</span>
-        </div>
+        <NavLink to="/" className="topnav-brand" end>
+          <span className="topnav-brand-icon"><IconMark /></span>
+          <span className="topnav-brand-name">TRIAL<b>MIND</b></span>
+        </NavLink>
 
         <div className="topnav-links">
           {visibleItems.map((item) => (
@@ -54,7 +54,7 @@ export default function TopNavigation() {
               end={item.end}
               className={({ isActive }) => `topnav-link ${isActive ? "is-active" : ""}`}
             >
-              <span className="topnav-link-icon">{item.icon}</span>
+              <span className="topnav-link-icon"><Icon name={item.icon} /></span>
               <span className="topnav-link-label">{item.label}</span>
             </NavLink>
           ))}
@@ -62,21 +62,20 @@ export default function TopNavigation() {
 
         <div className="topnav-actions">
           <select
+            className="topnav-role-select"
             value={role}
             onChange={(e) => setRole(e.target.value)}
             title="Acting role (Priority 5 — Role-Based Access). No login in this demo build; every API request carries this role and the backend enforces it."
-            style={{ fontSize: 12.5, padding: "4px 8px" }}
           >
             {ROLES.map((r) => (
               <option key={r} value={r}>{r}</option>
             ))}
           </select>
           {isReadOnly && (
-            <span className="badge normal" style={{ fontSize: 10.5 }} title="This role can view but not modify data.">
+            <span className="badge normal" style={{ fontSize: 10 }} title="This role can view but not modify data.">
               READ-ONLY
             </span>
           )}
-          <ThemeToggle />
           {role === "Administrator" && (
             <div className="topnav-menu" ref={menuRef}>
               <button
@@ -85,7 +84,7 @@ export default function TopNavigation() {
                 aria-label="Administration"
                 aria-expanded={menuOpen}
               >
-                ⚙️
+                <IconSettings />
               </button>
               {menuOpen && (
                 <div className="topnav-dropdown">

@@ -231,7 +231,86 @@ class SafetyCase(Base):
     report_due_date = Column(DateTime(timezone=True), nullable=True)
     reported_date = Column(DateTime(timezone=True), nullable=True)
 
+    # Priority 3(b) -- Safety Signal Engine inputs. All optional: a case
+    # can be recorded (and reported on the deadline engine) without any of
+    # these, but the signal detector can only correlate cases that have
+    # drug + batch_number populated. `location` is deliberately separate
+    # from site_id -- a free-text ward/clinic/geo label, since a real
+    # cluster can be tighter than "the whole site" (e.g. one ward).
+    drug = Column(String, nullable=True)
+    batch_number = Column(String, nullable=True)
+    dose = Column(String, nullable=True)  # free text: units vary ("10mg", "2 tablets")
+    route = Column(String, nullable=True)  # oral, IV, IM, topical, etc.
+    administration_date = Column(DateTime(timezone=True), nullable=True)
+    location = Column(String, nullable=True)  # free-text ward/clinic, distinct from site_id
+
+    # Priority 1(b) SIH improvements: symptom_onset_date lets a reviewer see
+    # the dose-to-onset latency for a case (a key pharmacovigilance signal
+    # in its own right, independent of the cluster-level Safety Signal
+    # Engine above); action_taken records what was done about the drug in
+    # response to the event (ICH E2A-style categories), which regulators
+    # and PV officers expect to see alongside outcome/causality.
+    symptom_onset_date = Column(DateTime(timezone=True), nullable=True)
+    action_taken = Column(String, nullable=True)  # dose_not_changed, dose_reduced, drug_withdrawn, drug_interrupted, unknown
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class SafetySignal(Base):
+    """Priority 3(b) -- Safety Signal Engine.
+
+    A candidate safety signal: a cluster of SafetyCase rows that share
+    drug + batch_number, fall within a rolling time window of each other,
+    and (optionally) concentrate at one site, surfaced for human
+    pharmacovigilance review. This is a *signal*, not a finding -- it
+    names a correlation, not a cause. Laboratory testing / formal
+    investigation confirms or refutes it; TrialMind only flags the pattern
+    (see safety_signals.py docstring).
+
+    signal_key identifies the underlying cluster (study+drug+batch+site)
+    so re-running detection updates an open/under_review signal in place
+    instead of creating duplicates, while an escalated/dismissed signal is
+    a frozen human decision that re-detection no longer touches.
+    """
+    __tablename__ = "safety_signals"
+    id = Column(Integer, primary_key=True, index=True)
+    study_id = Column(Integer, ForeignKey("studies.id"), nullable=False)
+    site_id = Column(Integer, ForeignKey("sites.id"), nullable=True)  # set only if cluster concentrates at one site
+
+    signal_key = Column(String, index=True, nullable=False)
+
+    drug = Column(String, nullable=False)
+    batch_number = Column(String, nullable=False)
+
+    window_start = Column(DateTime(timezone=True), nullable=False)
+    window_end = Column(DateTime(timezone=True), nullable=False)
+
+    case_ids = Column(Text, nullable=False)  # JSON list of SafetyCase ids in the cluster
+    patient_count = Column(Integer, default=0)  # distinct patients
+    case_count = Column(Integer, default=0)
+
+    symptom_similarity = Column(Float, default=0.0)  # avg pairwise TF-IDF cosine similarity of event_term
+    site_concentration = Column(Float, default=0.0)  # fraction of cluster cases at the dominant site
+    # Priority 1 SIH improvement: finer-grained than site_concentration --
+    # fraction of cluster cases at the single most common free-text
+    # location (ward/clinic) within the cluster, since a real cluster can
+    # be tighter than "the whole site".
+    location_concentration = Column(Float, default=0.0)
+    dominant_location = Column(String, nullable=True)
+    confidence_score = Column(Float, default=0.0)  # 0-1, combines size/similarity/concentration
+    severity_score = Column(Float, default=0.0)  # 0-1, weighted by seriousness/fatality in the cluster
+
+    rationale = Column(Text, nullable=True)  # human-readable "why this signal fired"
+
+    # open (just detected) -> under_review (a PV officer has looked) ->
+    # escalated | dismissed (terminal human decision)
+    status = Column(String, default="open")
+    reviewed_by = Column(String, nullable=True)
+    review_notes = Column(Text, nullable=True)
+    reviewed_at = Column(DateTime(timezone=True), nullable=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
 class RegulatoryDraft(Base):

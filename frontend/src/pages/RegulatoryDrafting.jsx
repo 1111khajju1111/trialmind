@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import api from "../api/client.js";
 import GlassCard from "../components/ui/GlassCard.jsx";
 import GradientButton from "../components/ui/GradientButton.jsx";
+import { IconRegulatory } from "../design-system/icons.jsx";
+import HumanInLoopBadge from "../components/ui/HumanInLoopBadge.jsx";
 
 const DEFAULT_SUMMARY =
   "Phase 2 trial of GLYCO-3 in 240 patients with Type 2 Diabetes over 24 weeks. " +
@@ -78,7 +80,7 @@ export default function RegulatoryDrafting() {
       </GlassCard>
 
       <div className="section-heading">
-        <span className="section-heading-icon">📄</span> Drafts &amp; Version History
+        <span className="section-heading-icon"><IconRegulatory /></span> Drafts &amp; Version History
       </div>
 
       {drafts.length === 0 && !generating && (
@@ -96,6 +98,9 @@ export default function RegulatoryDrafting() {
           <pre className="draft-content">{d.draft_content}</pre>
           {d.status === "pending_review" && (
             <div>
+              <div style={{ margin: "0 0 8px" }}>
+                <HumanInLoopBadge label="AI-drafted section — review before approving" />
+              </div>
               <GradientButton variant="primary" onClick={() => decide(d.id, "approved")}>
                 Review &amp; Submit for Approval
               </GradientButton>

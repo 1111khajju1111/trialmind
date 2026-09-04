@@ -43,6 +43,19 @@ def get_portfolio(db: Session = Depends(get_db)):
     safety_cases = db.query(models.SafetyCase).all()
     safety_summary = safety_svc.summarize(safety_cases)
 
+    # Priority 2 SIH polish: the "Control Tower" single-screen view needs
+    # open safety *signals* (Safety Signal Engine clusters, distinct from
+    # open safety *cases* above) plus regulatory/monitoring alert counts,
+    # split out of the same compliance.build_alerts() feed the Regulatory
+    # page uses so the two views can never disagree on what counts as an
+    # alert.
+    open_safety_signals = db.query(models.SafetySignal).filter(
+        models.SafetySignal.status.in_(["open", "under_review"])
+    ).count()
+    compliance_alerts = compliance_svc.build_alerts(db)
+    regulatory_alert_count = sum(1 for a in compliance_alerts if a["type"] == "milestone")
+    monitoring_alert_count = sum(1 for a in compliance_alerts if a["type"] == "monitoring")
+
     return {
         "active_studies": len(active_studies),
         "total_studies": len(studies),
@@ -57,6 +70,9 @@ def get_portfolio(db: Session = Depends(get_db)):
         "open_safety_cases": safety_summary["open_cases"],
         "overdue_safety_reports": safety_summary["overdue_reports"],
         "approaching_due_safety_reports": safety_summary["approaching_due_reports"],
+        "open_safety_signals": open_safety_signals,
+        "regulatory_alert_count": regulatory_alert_count,
+        "monitoring_alert_count": monitoring_alert_count,
         "safety_module_available": True,
         # Not yet implemented -- the data-quality module (Priority 3 table
         # also lists "Data-quality queries" but it isn't part of the

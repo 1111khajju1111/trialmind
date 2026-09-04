@@ -428,3 +428,57 @@ def test_dashboard_always_carries_deadline_disclaimer(client):
     assert resp.status_code == 200
     disclaimer = resp.json().get("deadline_disclaimer", "")
     assert "not" in disclaimer.lower() and "validated" in disclaimer.lower()
+
+
+# ---------- Priority 1 SIH improvements: symptom_onset_date / action_taken ----------
+
+def test_case_accepts_and_returns_onset_date_and_action_taken(client):
+    test_client, SessionLocal = client
+    study_id, site_id, patient_id = _make_study_with_subject(SessionLocal)
+    admin_dt = datetime.now(timezone.utc) - timedelta(hours=5)
+    onset_dt = admin_dt + timedelta(hours=2)
+
+    resp = test_client.post(
+        "/safety/adverse-events",
+        json=_ae_payload(
+            study_id, patient_id, site_id,
+            drug="Metformin XR", batch_number="BATCH-01",
+            administration_date=admin_dt.isoformat(),
+            symptom_onset_date=onset_dt.isoformat(),
+            action_taken="drug_withdrawn",
+        ),
+    )
+    data = resp.json()
+    assert data["action_taken"] == "drug_withdrawn"
+    assert data["symptom_onset_date"] is not None
+    # 2 hours between administration and onset
+    assert data["onset_latency_hours"] == pytest.approx(2.0, abs=0.05)
+
+
+def test_case_omits_onset_latency_when_either_timestamp_missing(client):
+    test_client, SessionLocal = client
+    study_id, site_id, patient_id = _make_study_with_subject(SessionLocal)
+    resp = test_client.post(
+        "/safety/adverse-events", json=_ae_payload(study_id, patient_id, site_id),
+    )
+    data = resp.json()
+    assert data["onset_latency_hours"] is None
+    assert data["action_taken"] is None
+
+
+def test_rejects_unknown_action_taken_value(client):
+    test_client, SessionLocal = client
+    study_id, site_id, patient_id = _make_study_with_subject(SessionLocal)
+    resp = test_client.post(
+        "/safety/adverse-events",
+        json=_ae_payload(study_id, patient_id, site_id, action_taken="something_else"),
+    )
+    assert resp.status_code == 422
+
+
+def test_onset_latency_helper_rejects_onset_before_administration():
+    # Bad/unreliable data (onset logged before the dose was even given)
+    # should read as "unknown", not as a nonsensical negative latency.
+    admin_dt = datetime.now(timezone.utc)
+    onset_dt = admin_dt - timedelta(hours=1)
+    assert safety_svc.onset_latency_hours(admin_dt, onset_dt) is None

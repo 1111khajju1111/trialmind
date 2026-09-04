@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import api from "../api/client.js";
 import GlassCard from "../components/ui/GlassCard.jsx";
 import ActionTimeline from "../components/ActionTimeline.jsx";
+import { IconCompass, IconFolder } from "../design-system/icons.jsx";
 
 export default function AuditTrail() {
   const [runs, setRuns] = useState([]);
@@ -55,7 +56,7 @@ export default function AuditTrail() {
       {!loading && (
         <>
           <div className="section-heading">
-            <span className="section-heading-icon">🧭</span> Agent Runs
+            <span className="section-heading-icon"><IconCompass /></span> Agent Runs
           </div>
 
           {runs.length === 0 && <GlassCard>No agent runs yet. Run the matching agent from Trial Matching.</GlassCard>}
@@ -96,7 +97,7 @@ export default function AuditTrail() {
           </div>
 
           <div className="section-heading" style={{ marginTop: 28 }}>
-            <span className="section-heading-icon">🗂️</span> Approval Log
+            <span className="section-heading-icon"><IconFolder /></span> Approval Log
           </div>
 
           {log.length === 0 && (

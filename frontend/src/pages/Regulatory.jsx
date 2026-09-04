@@ -3,9 +3,17 @@ import { Link } from "react-router-dom";
 import api from "../api/client.js";
 import GlassCard from "../components/ui/GlassCard.jsx";
 import KPIGrid from "../components/dashboard/KPIGrid.jsx";
+import {
+  IconClipboard, IconCheck, IconClock, IconMinus, IconRegulatory,
+  IconCalendar, IconDot, IconAlertCircle, IconSearch,
+} from "../design-system/icons.jsx";
 
 const SEVERITY_BADGE = { overdue: "rejected", due_soon: "high" };
-const TYPE_ICON = { milestone: "\u2696\uFE0F", safety: "🚨", monitoring: "\uD83D\uDD0D" };
+const TYPE_ICON = {
+  milestone: <IconRegulatory />,
+  safety: <IconAlertCircle />,
+  monitoring: <IconSearch />,
+};
 
 function badge(map, value) {
   return <span className={`badge ${map[value] || "normal"}`}>{(value || "").replace(/_/g, " ")}</span>;
@@ -42,43 +50,43 @@ export default function Regulatory() {
         across the whole portfolio.
       </p>
 
-      <div className="section-heading"><span className="section-heading-icon">📋</span> CTRI Registration Status</div>
+      <div className="section-heading"><span className="section-heading-icon"><IconClipboard /></span> CTRI Registration Status</div>
       <div className="kpi-grid">
         <GlassCard className="kpi-card">
-          <div className="kpi-card-icon">✅</div>
+          <div className="kpi-card-icon"><IconCheck /></div>
           <div className="kpi-card-value">{ctri.registered || 0}</div>
           <div className="kpi-card-label">Registered</div>
         </GlassCard>
         <GlassCard className="kpi-card" glow={(ctri.pending || 0) > 0 ? "warning" : undefined}>
-          <div className="kpi-card-icon">⏳</div>
+          <div className="kpi-card-icon"><IconClock /></div>
           <div className="kpi-card-value">{ctri.pending || 0}</div>
           <div className="kpi-card-label">Pending</div>
         </GlassCard>
         <GlassCard className="kpi-card">
-          <div className="kpi-card-icon">➖</div>
+          <div className="kpi-card-icon"><IconMinus /></div>
           <div className="kpi-card-value">{ctri.not_registered || 0}</div>
           <div className="kpi-card-label">Not Registered</div>
         </GlassCard>
         <GlassCard className="kpi-card">
-          <div className="kpi-card-icon">📝</div>
+          <div className="kpi-card-icon"><IconRegulatory /></div>
           <div className="kpi-card-value">{data.amendments_logged}</div>
           <div className="kpi-card-label">Amendments Logged</div>
         </GlassCard>
       </div>
 
-      <div className="section-heading"><span className="section-heading-icon">📅</span> Regulatory Milestones</div>
+      <div className="section-heading"><span className="section-heading-icon"><IconCalendar /></span> Regulatory Milestones</div>
       <KPIGrid
         items={[
-          { icon: "\uD83D\uDFE2", label: "On Track", value: data.regulatory_milestones_on_track },
+          { icon: <IconDot color="var(--accent-emerald)" />, label: "On Track", value: data.regulatory_milestones_on_track },
           {
-            icon: "\uD83D\uDFE1", label: "Due Soon", value: data.regulatory_milestones_due_soon,
+            icon: <IconDot color="var(--accent-amber)" />, label: "Due Soon", value: data.regulatory_milestones_due_soon,
             glow: data.regulatory_milestones_due_soon > 0 ? "warning" : undefined,
           },
           {
-            icon: "\uD83D\uDD34", label: "Overdue", value: data.regulatory_milestones_overdue,
+            icon: <IconDot color="var(--accent-red)" />, label: "Overdue", value: data.regulatory_milestones_overdue,
             glow: data.regulatory_milestones_overdue > 0 ? "warning" : undefined,
           },
-          { icon: "✅", label: "Completed", value: data.regulatory_milestones_completed },
+          { icon: <IconCheck />, label: "Completed", value: data.regulatory_milestones_completed },
         ]}
       />
       {data.deadline_disclaimer && (
@@ -88,7 +96,7 @@ export default function Regulatory() {
       )}
 
       <div className="section-heading">
-        <span className="section-heading-icon">🚨</span> Compliance Alerts ({data.total_alert_count})
+        <span className="section-heading-icon"><IconAlertCircle /></span> Compliance Alerts ({data.total_alert_count})
       </div>
       {data.alerts.length === 0 && (
         <GlassCard>No overdue or due-soon items across the portfolio right now.</GlassCard>

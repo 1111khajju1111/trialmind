@@ -18,7 +18,9 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app import models, schemas
 from app.services import safety as safety_svc
+from app.services import safety_signals as signal_svc
 from app.rbac import require_role
+import json
 
 router = APIRouter(prefix="/safety", tags=["pharmacovigilance"])
 
@@ -58,6 +60,17 @@ def _case_out(db: Session, case: models.SafetyCase) -> dict:
         "report_due_date": case.report_due_date,
         "reported_date": case.reported_date,
         "due_status": safety_svc.due_status(case.report_due_date, case.status),
+        "drug": case.drug,
+        "batch_number": case.batch_number,
+        "dose": case.dose,
+        "route": case.route,
+        "administration_date": case.administration_date,
+        "location": case.location,
+        "symptom_onset_date": case.symptom_onset_date,
+        "action_taken": case.action_taken,
+        "onset_latency_hours": safety_svc.onset_latency_hours(
+            case.administration_date, case.symptom_onset_date
+        ),
         "created_at": case.created_at,
     }
 
@@ -139,6 +152,14 @@ def _create_case(payload: schemas.SafetyCaseCreate, db: Session, *, require_seri
         narrative=payload.narrative,
         status="draft",
         report_due_date=due,
+        drug=payload.drug,
+        batch_number=payload.batch_number,
+        dose=payload.dose,
+        route=payload.route,
+        administration_date=payload.administration_date,
+        location=payload.location,
+        symptom_onset_date=payload.symptom_onset_date,
+        action_taken=payload.action_taken,
     )
     db.add(case)
     db.commit()
@@ -266,3 +287,132 @@ def safety_dashboard(study_id: int | None = None, db: Session = Depends(get_db))
     # service) sees the same caveat the docstring gives a code reader.
     summary["deadline_disclaimer"] = safety_svc.DEADLINE_DISCLAIMER
     return summary
+
+
+# ---------- Safety Signal Engine (Priority 3(b)) ----------
+
+def _signal_out(db: Session, signal: models.SafetySignal) -> dict:
+    site = db.query(models.Site).filter(models.Site.id == signal.site_id).first() if signal.site_id else None
+    case_ids = json.loads(signal.case_ids) if signal.case_ids else []
+    return {
+        "id": signal.id,
+        "study_id": signal.study_id,
+        "site_id": signal.site_id,
+        "site_name": site.institution if site else None,
+        "signal_key": signal.signal_key,
+        "drug": signal.drug,
+        "batch_number": signal.batch_number,
+        "window_start": signal.window_start,
+        "window_end": signal.window_end,
+        "case_ids": case_ids,
+        "patient_count": signal.patient_count,
+        "case_count": signal.case_count,
+        "symptom_similarity": signal.symptom_similarity,
+        "site_concentration": signal.site_concentration,
+        "location_concentration": signal.location_concentration,
+        "dominant_location": signal.dominant_location,
+        "confidence_score": signal.confidence_score,
+        "severity_score": signal.severity_score,
+        "rationale": signal.rationale,
+        "status": signal.status,
+        "reviewed_by": signal.reviewed_by,
+        "review_notes": signal.review_notes,
+        "reviewed_at": signal.reviewed_at,
+        "created_at": signal.created_at,
+        "updated_at": signal.updated_at,
+        "disclaimer": signal_svc.SIGNAL_DISCLAIMER,
+    }
+
+
+@router.post("/signals/detect", dependencies=[Depends(require_role("Pharmacovigilance"))])
+def detect_signals(payload: schemas.SafetySignalDetectRequest, db: Session = Depends(get_db)):
+    """Runs the correlation engine over drug+batch+time clusters in scope
+    and creates/updates SafetySignal rows. Does not touch escalated or
+    dismissed signals -- those are frozen human decisions."""
+    if payload.study_id is not None:
+        _get_study_or_404(db, payload.study_id)
+
+    signals = signal_svc.detect_signals(
+        db, study_id=payload.study_id, window_hours=payload.window_hours, min_patients=payload.min_patients,
+    )
+
+    scope = f"study #{payload.study_id}" if payload.study_id is not None else "all studies"
+    log_study_id = payload.study_id if payload.study_id is not None else 0
+    _log(db, log_study_id, "safety_signal_detection_run",
+         f"Signal detection run over {scope} (window={payload.window_hours}h, "
+         f"min_patients={payload.min_patients}): {len(signals)} signal(s) open or updated.")
+    db.commit()
+
+    return {"signals_detected": len(signals), "signals": [_signal_out(db, s) for s in signals]}
+
+
+@router.get("/signals")
+def list_signals(study_id: int | None = None, status: str | None = None, db: Session = Depends(get_db)):
+    query = db.query(models.SafetySignal)
+    if study_id is not None:
+        query = query.filter(models.SafetySignal.study_id == study_id)
+    if status is not None:
+        query = query.filter(models.SafetySignal.status == status)
+    signals = query.order_by(models.SafetySignal.confidence_score.desc(), models.SafetySignal.id.desc()).all()
+    return [_signal_out(db, s) for s in signals]
+
+
+@router.get("/signals/{signal_id}")
+def get_signal(signal_id: int, db: Session = Depends(get_db)):
+    signal = db.query(models.SafetySignal).filter(models.SafetySignal.id == signal_id).first()
+    if not signal:
+        raise HTTPException(status_code=404, detail="Safety signal not found.")
+    out = _signal_out(db, signal)
+    case_ids = out["case_ids"]
+    cases = db.query(models.SafetyCase).filter(models.SafetyCase.id.in_(case_ids)).all() if case_ids else []
+    out["cases"] = [_case_out(db, c) for c in cases]
+    return out
+
+
+@router.patch("/signals/{signal_id}/status", dependencies=[Depends(require_role("Pharmacovigilance"))])
+def update_signal_status(
+    signal_id: int, payload: schemas.SafetySignalStatusUpdate, db: Session = Depends(get_db),
+):
+    """Human review workflow: open -> under_review is required first (a PV
+    officer must look before deciding), then under_review branches to
+    escalated or dismissed. Both are terminal -- re-detection will never
+    modify a signal again after this. No skipping straight from open to a
+    terminal state, matching the 'signal must be reviewed before it's
+    acted on' principle from the module docstring."""
+    signal = db.query(models.SafetySignal).filter(models.SafetySignal.id == signal_id).first()
+    if not signal:
+        raise HTTPException(status_code=404, detail="Safety signal not found.")
+
+    if signal.status in signal_svc.TERMINAL_STATUSES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Signal #{signal.id} is already '{signal.status}', a terminal review decision.",
+        )
+
+    new_status = payload.status
+    if signal.status == "open" and new_status not in ("under_review",):
+        raise HTTPException(
+            status_code=400,
+            detail="An 'open' signal must move to 'under_review' first, before escalating or dismissing.",
+        )
+    if signal.status == "under_review" and new_status not in ("escalated", "dismissed"):
+        raise HTTPException(
+            status_code=400,
+            detail="A signal 'under_review' can only move to 'escalated' or 'dismissed'.",
+        )
+
+    prev_status = signal.status
+    signal.status = new_status
+    if new_status in signal_svc.TERMINAL_STATUSES or new_status == "under_review":
+        signal.reviewed_by = "demo_user"  # matches ApprovalLog.actor's demo-scope pattern
+        if payload.review_notes:
+            signal.review_notes = payload.review_notes
+        signal.reviewed_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(signal)
+
+    _log(db, signal.study_id, "safety_signal_status_changed",
+         f"Signal #{signal.id} ({signal.drug}/{signal.batch_number}) moved {prev_status} -> {new_status}.")
+    db.commit()
+
+    return _signal_out(db, signal)

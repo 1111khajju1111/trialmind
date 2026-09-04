@@ -3,15 +3,18 @@
 // Administrator, which always sees everything -- see TopNavigation.jsx).
 // This only controls what's convenient to click; the backend (app/rbac.py)
 // is the actual enforcement boundary, not this list.
+//
+// `icon` names resolve against the single icon family in
+// ../../design-system/icons.jsx (see ICONS map) -- no emoji here.
 export const NAV_ITEMS = [
-  { to: "/", label: "Dashboard", icon: "\u{1F4CA}", end: true, roles: null },
-  { to: "/studies", label: "Studies", icon: "\u{1F3E5}", roles: null },
-  { to: "/trialmind", label: "Trial Matching", icon: "\u{1F9EC}", roles: ["Principal Investigator", "Study Coordinator"] },
-  { to: "/patients", label: "Patients", icon: "\u{1F465}", roles: ["Principal Investigator", "Study Coordinator", "Monitor"] },
-  { to: "/safety", label: "Safety", icon: "\u{1FA79}", roles: ["Pharmacovigilance", "Principal Investigator", "Study Coordinator"] },
-  { to: "/compliance", label: "Compliance", icon: "\u2696\uFE0F", roles: ["Ethics Committee", "Study Coordinator", "Regulator"] },
-  { to: "/regulatory", label: "Reg. Drafting", icon: "\u{1F4CB}", roles: ["Study Coordinator", "Ethics Committee"] },
-  { to: "/lab-scheduling", label: "Lab", icon: "\u{1F9EA}", roles: ["Study Coordinator", "Monitor"] },
-  { to: "/interop", label: "Interoperability", icon: "\u{1F517}", roles: null },
-  { to: "/audit", label: "Audit", icon: "\u{1F9ED}", roles: null },
+  { to: "/", label: "Dashboard", icon: "dashboard", end: true, roles: null },
+  { to: "/studies", label: "Studies", icon: "studies", roles: null },
+  { to: "/trialmind", label: "TrialMind", icon: "trialmind", roles: ["Principal Investigator", "Study Coordinator"] },
+  { to: "/patients", label: "Patients", icon: "patients", roles: ["Principal Investigator", "Study Coordinator", "Monitor"] },
+  { to: "/safety", label: "Safety", icon: "safety", roles: ["Pharmacovigilance", "Principal Investigator", "Study Coordinator"] },
+  { to: "/compliance", label: "Compliance", icon: "compliance", roles: ["Ethics Committee", "Study Coordinator", "Regulator"] },
+  { to: "/regulatory", label: "Reg. Drafting", icon: "regulatory", roles: ["Study Coordinator", "Ethics Committee"] },
+  { to: "/lab-scheduling", label: "Lab", icon: "lab", roles: ["Study Coordinator", "Monitor"] },
+  { to: "/interop", label: "Interoperability", icon: "interop", roles: null },
+  { to: "/audit", label: "Audit", icon: "audit", roles: null },
 ];

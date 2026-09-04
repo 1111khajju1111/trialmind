@@ -22,6 +22,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 from app.database import Base
 from app import models
@@ -30,7 +31,22 @@ from app.services.agent_orchestrator import run_agent
 
 @pytest.fixture
 def db_session():
-    engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+    # Fix (Priority 0 -- database test isolation): every other test file in
+    # this suite pins poolclass=StaticPool for its in-memory SQLite engine;
+    # this one didn't. Without it, SQLAlchemy's default for a `:memory:`
+    # URL is SingletonThreadPool (one connection *per thread*, reused up to
+    # pool_size before being recycled) rather than a single connection for
+    # the whole engine's lifetime -- correct enough for a short-lived
+    # single-threaded test, but it's an unpinned implicit default, not a
+    # guarantee, and inconsistent with the rest of the suite. StaticPool
+    # makes "one shared in-memory database for this engine" an explicit
+    # property of the fixture instead of an artifact of SQLAlchemy's
+    # dialect-selection logic.
+    engine = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
     Base.metadata.create_all(bind=engine)
     SessionLocal = sessionmaker(bind=engine)
     session = SessionLocal()

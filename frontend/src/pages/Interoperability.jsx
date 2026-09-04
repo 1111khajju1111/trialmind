@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import api from "../api/client.js";
 import GlassCard from "../components/ui/GlassCard.jsx";
 import GradientButton from "../components/ui/GradientButton.jsx";
+import { IconLink, IconExport } from "../design-system/icons.jsx";
 
 // Priority 7 -- FHIR + CDISC Demonstrator. A convincing interoperability
 // preview built from live data, not a certified conformance statement --
@@ -99,7 +100,7 @@ export default function Interoperability() {
       </GlassCard>
 
       <div className="section-heading">
-        <span className="section-heading-icon">🔗</span> FHIR R4 Resources
+        <span className="section-heading-icon"><IconLink /></span> FHIR R4 Resources
       </div>
       <GlassCard>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -112,7 +113,7 @@ export default function Interoperability() {
       </GlassCard>
 
       <div className="section-heading">
-        <span className="section-heading-icon">📤</span> CDISC SDTM Export
+        <span className="section-heading-icon"><IconExport /></span> CDISC SDTM Export
       </div>
       <GlassCard>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>

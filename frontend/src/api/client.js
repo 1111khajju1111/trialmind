@@ -118,6 +118,13 @@ export const api = {
   getSafetyDashboard: (studyId) =>
     client.get("/safety/dashboard", { params: studyId ? { study_id: studyId } : {} }),
 
+  // ---------- Priority 3(b): Safety Signal Engine ----------
+  detectSafetySignals: (payload) => client.post("/safety/signals/detect", payload),
+  getSafetySignals: (params) => client.get("/safety/signals", { params }),
+  getSafetySignal: (signalId) => client.get(`/safety/signals/${signalId}`),
+  updateSafetySignalStatus: (signalId, status, reviewNotes) =>
+    client.patch(`/safety/signals/${signalId}/status`, { status, review_notes: reviewNotes || undefined }),
+
   // ---------- Priority 5: RBAC ----------
   getRoles: () => client.get("/rbac/roles"),
 

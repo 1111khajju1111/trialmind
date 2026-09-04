@@ -80,6 +80,23 @@ def due_status(due_date: datetime | None, status: str, now: datetime | None = No
     return "on_track"
 
 
+ACTION_TAKEN_OPTIONS = ["dose_not_changed", "dose_reduced", "drug_withdrawn", "drug_interrupted", "unknown"]
+
+
+def onset_latency_hours(administration_date: datetime | None, symptom_onset_date: datetime | None) -> float | None:
+    """Hours between dosing and symptom onset -- a standard pharmacovigilance
+    signal in its own right (a very short latency is itself noteworthy),
+    independent of the cluster-level correlation in safety_signals.py.
+    Returns None if either timestamp is missing, or if onset is before
+    administration (bad/unreliable data -- don't report a negative number
+    as if it meant something)."""
+    if administration_date is None or symptom_onset_date is None:
+        return None
+    delta = _aware(symptom_onset_date) - _aware(administration_date)
+    hours = delta.total_seconds() / 3600
+    return round(hours, 1) if hours >= 0 else None
+
+
 def summarize(cases: list) -> dict:
     """Shared aggregation used by both the study-scoped and portfolio-wide
     safety dashboards, so the two never drift out of sync on definitions."""

@@ -8,9 +8,10 @@
 | P2 | AI Recruitment Module (TrialMind eligibility + matching wired to Study/Subject) | 🟢 Done |
 | P3 | Pharmacovigilance MVP (AE/SAE capture, status workflow, deadline engine, safety dashboard) | 🟢 **Done — frozen stable** |
 | P4 | Ethics + CTRI + Regulatory Compliance | 🟢 Done |
-| P5 | Role-Based Access + Audit | ⏭️ Not started |
-| P6 | Consent & Data Protection MVP | ⏭️ Not started |
-| P7 | FHIR + CDISC Demonstrator | ⏭️ Not started |
+| P3b | Safety Signal Engine (drug/batch/site/time correlation) | 🟢 Done |
+| P5 | Role-Based Access + Audit | 🟢 Done |
+| P6 | Consent & Data Protection MVP | 🟢 Done |
+| P7 | FHIR + CDISC Demonstrator | 🟢 Done |
 
 Priority 3 hardening pass (frozen): StudySubject-membership validation on
 every safety case, strictly sequential Draft → Under Review → Reported →
@@ -37,10 +38,11 @@ deterministic eligibility checks, retrieving supporting evidence from the
 protocol text, and drafting physician outreach — all under a hard human
 approval gate, with every step recorded to an audit trail.
 
-Built for HackSprint 2026 (Generative AI & Agentic Workflow / Healthcare
-Innovation tracks). Patient matching (**TrialMind**) is the deeply-built,
-demo-ready module; regulatory drafting and lab scheduling remain in the
-codebase as secondary/roadmap features rather than three shallow builds.
+Built for SIH26046 (Smart India Hackathon, Problem Statement 26046 —
+Generative AI & Agentic Workflow / Healthcare Innovation tracks). Patient
+matching (**TrialMind**) is the deeply-built, demo-ready module; regulatory
+drafting and lab scheduling remain in the codebase as secondary/roadmap
+features rather than three shallow builds.
 
 ## The problem
 
@@ -142,6 +144,79 @@ doesn't really fit. Four verdicts come out of this:
 A 94% "score" with one missing required field is `POTENTIAL_MATCH`, not a
 silent pass — the UI never forces a binary result when required data isn't
 available, and explicitly lists what's missing.
+
+## Priority 3(b): Safety Signal Engine
+
+`app/services/safety_signals.py` correlates AE/SAE cases (`SafetyCase` rows)
+that share a drug + batch number and cluster in time — optionally
+concentrated at one site, and within that, at one free-text ward/clinic
+`location` (`location_concentration`/`dominant_location`, finer-grained
+than site alone) — and raises a `SafetySignal` for human
+pharmacovigilance review. It groups cases by (study, drug, batch), chains
+them into rolling time-window clusters, scores symptom similarity with
+TF-IDF cosine similarity over the reported terms, and blends cluster size,
+symptom similarity, and site concentration into a `confidence_score`.
+Each case also optionally records `symptom_onset_date` (from which
+`onset_latency_hours` is derived relative to `administration_date`) and
+`action_taken` (dose unchanged/reduced/drug withdrawn/interrupted) —
+standard pharmacovigilance fields shown alongside the cluster-level signal,
+not inputs to the correlation itself. **Scope note:** this detects a
+statistical correlation worth investigating — it never claims or confirms
+"contamination," never auto-escalates, and never auto-dismisses. Every
+signal starts `open` and requires a human (`Pharmacovigilance` role) to
+move it to `under_review` and then to a terminal `escalated` or
+`dismissed` state. Covered by `backend/tests/test_safety_signals.py` and
+`backend/tests/test_safety.py`.
+
+## Priority 5: Role-Based Access + Audit
+
+`app/rbac.py` defines the seven SIH26046 roles (Principal Investigator,
+Study Coordinator, Monitor, Ethics Committee, Pharmacovigilance,
+Administrator, Regulator) and resolves the acting role from the
+`X-User-Role` header sent by the frontend's role switcher. A single
+`main.py` middleware enforces the `Regulator` role's read-only restriction
+globally, so no future write endpoint can forget to exclude it. This is
+deliberately a thin, demo-appropriate RBAC layer — no login/session/password
+— not a production identity provider; see `app/rbac.py`'s docstring for the
+full rationale.
+
+## Priority 6: Consent & Data Protection MVP
+
+`StudySubject.consent_status/consent_version/consent_date` track informed
+consent per subject (`app/routers/studies.py`). Consent must be recorded as
+`obtained` before a subject can be enrolled — enforced server-side, not just
+hidden in the UI — matching standard GCP/DPDP practice that consent
+precedes any study procedure. Every consent status change is written to the
+study's audit log.
+
+## Priority 7: FHIR + CDISC Demonstrator
+
+`app/services/interop.py` and `app/routers/interop.py` expose
+`GET /interop/fhir/{resource}` (FHIR R4 Bundles built live from the seeded
+data), `GET /interop/mapping` (a human-readable internal-field → FHIR/SDTM
+mapping doc), and `GET /export/sdtm/{domain}` (SDTM-style CSV export for
+DM and AE domains). The frontend's Interoperability page renders these.
+
+## Control Tower & Human-in-the-Loop
+
+`GET /dashboard/portfolio` reports six portfolio-wide numbers in one
+place — active trials, enrollment, AE/SAE, open Safety Signals (distinct
+from open safety *cases*), and regulatory/monitoring alert counts split
+out of the same `compliance.build_alerts()` feed the Regulatory page
+uses — rendered as an always-visible "Control Tower" panel at the top of
+the Dashboard (not tucked inside the collapsible Operational Modules
+section below it). Covered by `backend/tests/test_dashboard.py`.
+
+Every AI-assisted output in the app — the eligibility verdict, the
+AI-drafted outreach email, the AI-drafted regulatory section, and the
+algorithmically-detected Safety Signal — carries a consistent
+`HumanInLoopBadge` (`frontend/src/components/ui/HumanInLoopBadge.jsx`)
+in addition to whatever review/approval gate already exists for that
+flow, so no AI-assisted content in the app is unlabeled.
+
+A permanent, always-rendered banner (`DemoBanner.jsx`, not conditional on
+a backend health check) reads "DEMO ENVIRONMENT · SYNTHETIC DATA · NOT
+FOR CLINICAL DECISION-MAKING" on every page.
 
 ## RAG: evidence, not vibes
 

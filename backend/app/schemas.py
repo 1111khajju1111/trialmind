@@ -334,6 +334,9 @@ SERIOUSNESS_VALUES = Literal[
 OUTCOME_VALUES = Literal["recovered", "recovering", "not_recovered", "fatal", "unknown"]
 CAUSALITY_VALUES = Literal["unrelated", "unlikely", "possible", "probable", "definite", "unassessed"]
 SAFETY_STATUS_VALUES = Literal["draft", "under_review", "reported", "closed"]
+ACTION_TAKEN_VALUES = Literal[
+    "dose_not_changed", "dose_reduced", "drug_withdrawn", "drug_interrupted", "unknown"
+]
 
 
 class SafetyCaseCreate(BaseModel):
@@ -348,12 +351,49 @@ class SafetyCaseCreate(BaseModel):
     causality: CAUSALITY_VALUES = "unassessed"
     narrative: Optional[str] = None
 
+    # Priority 3(b) -- Safety Signal Engine inputs. All optional: recording
+    # an AE/SAE never requires these, but the signal detector can only use
+    # cases where drug + batch_number are both present.
+    drug: Optional[str] = None
+    batch_number: Optional[str] = None
+    dose: Optional[str] = None
+    route: Optional[str] = None
+    administration_date: Optional[datetime] = None
+    location: Optional[str] = None
+
+    # Priority 1(b) SIH improvements. Both optional for the same reason as
+    # the block above: recording an AE/SAE never requires them.
+    symptom_onset_date: Optional[datetime] = None
+    action_taken: Optional[ACTION_TAKEN_VALUES] = None
+
     class Config:
         extra = "forbid"
 
 
 class SafetyCaseStatusUpdate(BaseModel):
     status: SAFETY_STATUS_VALUES
+
+    class Config:
+        extra = "forbid"
+
+
+# ---------- Priority 3(b): Safety Signal Engine ----------
+
+SIGNAL_STATUS_VALUES = Literal["open", "under_review", "escalated", "dismissed"]
+
+
+class SafetySignalDetectRequest(BaseModel):
+    study_id: Optional[int] = None  # None = scan across all studies
+    window_hours: float = 6.0  # rolling time window that chains events into one cluster
+    min_patients: int = 2  # minimum distinct patients before a cluster is raised as a signal
+
+    class Config:
+        extra = "forbid"
+
+
+class SafetySignalStatusUpdate(BaseModel):
+    status: SIGNAL_STATUS_VALUES
+    review_notes: Optional[str] = None
 
     class Config:
         extra = "forbid"

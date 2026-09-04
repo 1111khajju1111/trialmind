@@ -23,20 +23,9 @@ def get_db():
 # lightweight equivalent for "ADD COLUMN IF NOT EXISTS" that works on both
 # SQLite and Postgres.
 _ADDED_COLUMNS = {
-    "trials": [
-        # Priority 2 -- links a trial to a Study so PatientMatch/recruitment
-        # can be traced to a study+site context. Added after `trials` was
-        # first deployed.
-        ("study_id", "INTEGER"),
-    ],
     "patient_matches": [
         ("study_id", "INTEGER"),
         ("site_id", "INTEGER"),
-        # Outreach lifecycle fields, added after `patient_matches` was
-        # first deployed: outreach_sent = coordinator finalized/locked the
-        # draft; email_transmitted = a real email actually went out.
-        ("outreach_sent", "BOOLEAN"),
-        ("email_transmitted", "BOOLEAN"),
     ],
     "approval_log": [
         ("rationale", "TEXT"),
@@ -54,6 +43,27 @@ _ADDED_COLUMNS = {
         ("consent_status", "TEXT"),
         ("consent_version", "TEXT"),
         ("consent_date", "TIMESTAMP"),
+    ],
+    "safety_cases": [
+        # Priority 3(b) -- Safety Signal Engine inputs, added after
+        # `safety_cases` was first deployed.
+        ("drug", "TEXT"),
+        ("batch_number", "TEXT"),
+        ("dose", "TEXT"),
+        ("route", "TEXT"),
+        ("administration_date", "TIMESTAMP"),
+        ("location", "TEXT"),
+        # Priority 1(b) SIH improvements, added after `safety_cases` was
+        # already deployed with the Priority 3(b) columns above.
+        ("symptom_onset_date", "TIMESTAMP"),
+        ("action_taken", "TEXT"),
+    ],
+    "safety_signals": [
+        # Priority 1 SIH improvement: location-level concentration, added
+        # after `safety_signals` was already deployed with the original
+        # Priority 3(b) columns.
+        ("location_concentration", "REAL"),
+        ("dominant_location", "TEXT"),
     ],
 }
 

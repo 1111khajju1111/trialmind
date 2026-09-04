@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import api from "../api/client.js";
 import GlassCard from "../components/ui/GlassCard.jsx";
 import GradientButton from "../components/ui/GradientButton.jsx";
+import { IconStudies } from "../design-system/icons.jsx";
 
 const STATUS_BADGE = {
   planning: "normal",
@@ -130,7 +131,7 @@ export default function Studies() {
       </GlassCard>
 
       <div className="section-heading">
-        <span className="section-heading-icon">🏥</span> All Studies
+        <span className="section-heading-icon"><IconStudies /></span> All Studies
       </div>
 
       {loading && <p className="loading">Loading...</p>}

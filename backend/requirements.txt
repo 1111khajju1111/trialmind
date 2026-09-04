@@ -5,6 +5,18 @@ psycopg2-binary==2.9.10
 pydantic==2.9.2
 pydantic-settings==2.6.1
 groq==0.11.0
+# Pinned: groq==0.11.0 (released before httpx 0.28) has no upper bound on
+# httpx. httpx>=0.28.0 removed the `proxies` kwarg that groq's underlying
+# client construction still passes, so an unpinned install resolves a
+# newer httpx and crashes with:
+#   TypeError: Client.__init__() got an unexpected keyword argument 'proxies'
+# This happens at MODULE IMPORT time (app/services/groq_client.py builds
+# the client eagerly), and trials.py/patients.py/regulatory.py all import
+# it -- so main.py, and therefore every `from app.main import app` in the
+# test suite, fails to even collect. Pinning httpx<0.28 fixes app startup,
+# the full test suite, and the Render deployment in one change. See:
+# https://github.com/openai/openai-python/issues/1903
+httpx==0.27.2
 python-dotenv==1.0.1
 pgvector==0.3.6
 python-multipart==0.0.12
@@ -13,4 +25,3 @@ numpy==1.26.4
 pypdf==5.0.1
 resend==2.4.0
 email-validator==2.3.0
-httpx==0.27.2

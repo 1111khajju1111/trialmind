@@ -7,6 +7,7 @@ from app.models import (
 from app.services.rag_service import chunk_text
 from app.services.recruitment import recompute_recruitment
 from app.services.safety import compute_due_date, is_serious
+from app.services.safety_signals import detect_signals
 from datetime import datetime, timedelta
 
 GLYCO3_PROTOCOL_TEXT = """
@@ -676,6 +677,55 @@ def seed_if_empty(db):
                 "Localized rash, resolved with oral antihistamine. Case closed after follow-up.",
             )
             db.commit()
+
+            # Priority 3(b) / Priority 1 SIH improvements: seed a
+            # deliberately clustered set of AE cases -- same drug, same
+            # batch, three distinct patients, all at the same site within
+            # a few hours of each other -- so the Safety Signal Engine
+            # panel has a real signal to show immediately after a fresh
+            # reset, rather than requiring the presenter to hand-enter
+            # cases live before the demo has anything to display. Also
+            # exercises symptom_onset_date/action_taken so those fields
+            # are visible in the demo, not just in the schema.
+            signal_batch = [
+                # (patient name, hours_ago at dosing, onset_hours_after_dose, event_term, action_taken)
+                ("J. Alvarez", 30.0, 1.5, "Acute urticaria and facial swelling within 2 hours of dosing", "drug_withdrawn"),
+                ("M. Chen", 28.0, 2.0, "Widespread hives and mild facial swelling shortly after dosing", "drug_withdrawn"),
+                ("S. Okafor", 26.5, 1.0, "Skin rash with swelling, onset within an hour of dosing", "drug_interrupted"),
+            ]
+            for patient_name, hours_ago, onset_after, event_term, action in signal_batch:
+                patient = _patient(patient_name)
+                if patient is None:
+                    continue
+                admin_dt = datetime.utcnow() - timedelta(hours=hours_ago)
+                onset_dt = admin_dt + timedelta(hours=onset_after)
+                due = compute_due_date(onset_dt, "other_serious")
+                db.add(SafetyCase(
+                    study_id=study.id, site_id=site_a.id, patient_id=patient.id,
+                    event_term=event_term, event_date=onset_dt,
+                    is_serious=True, severity="moderate", seriousness="other_serious",
+                    outcome="recovering", causality="probable", status="draft",
+                    narrative=(
+                        "Part of a cluster of similar hypersensitivity reactions reported "
+                        "at this site within the same batch -- see Safety Signal Engine."
+                    ),
+                    report_due_date=due,
+                    drug="Metformin XR", batch_number="BATCH-2026-07",
+                    dose="500mg", route="Oral",
+                    administration_date=admin_dt, location="Ward B",
+                    symptom_onset_date=onset_dt, action_taken=action,
+                ))
+            db.commit()
+            # Materialize the signal immediately (rather than waiting for a
+            # presenter to click "Run Detection" first) so the panel isn't
+            # empty on first load after a reset -- detection is idempotent
+            # and safe to re-run, so clicking "Run Detection" again live
+            # during the demo just confirms/updates the same signal.
+            try:
+                detect_signals(db, study_id=study.id)
+                db.commit()
+            except Exception:
+                db.rollback()
 
     if db.query(LabEquipment).count() == 0:
         equipment = [

@@ -1,14 +1,18 @@
-import { useEffect, useRef, useState, Suspense } from "react";
+import { useEffect, useRef, useState } from "react";
 import api from "../api/client.js";
 import ActionTimeline from "../components/ActionTimeline.jsx";
 import CandidateCard from "../components/CandidateCard.jsx";
 import GlassCard from "../components/ui/GlassCard.jsx";
 import GradientButton from "../components/ui/GradientButton.jsx";
 import ProgressRing from "../components/ui/ProgressRing.jsx";
-import AgentCoreScene from "../components/AgentCoreScene.jsx";
+import TrialMindConsole from "../components/TrialMindConsole.jsx";
+import RunCompleteSummary from "../components/RunCompleteSummary.jsx";
+import { IconTrialMind } from "../design-system/icons.jsx";
+import Reveal from "../design-system/Reveal.jsx";
 
 const TERMINAL_STEPS = new Set(["run_completed", "run_timeout", "agent_error", "persistence_failed"]);
 const POLL_INTERVAL_MS = 800;
+const WAKE_PULSE_MS = 900;
 
 export default function TrialMind() {
   const [trials, setTrials] = useState([]);
@@ -17,6 +21,7 @@ export default function TrialMind() {
   const [matches, setMatches] = useState([]);
   const [timeline, setTimeline] = useState([]);
   const [running, setRunning] = useState(false);
+  const [justStarted, setJustStarted] = useState(false);
   const [activeRunId, setActiveRunId] = useState(null);
   const [error, setError] = useState(null);
   const pollRef = useRef(null);
@@ -73,6 +78,8 @@ export default function TrialMind() {
   const runAgent = async () => {
     if (!selectedTrial) return;
     setRunning(true);
+    setJustStarted(true);
+    setTimeout(() => setJustStarted(false), WAKE_PULSE_MS);
     setError(null);
     setTimeline([]);
     setMatches([]);
@@ -216,6 +223,22 @@ export default function TrialMind() {
   const hasError = timeline.some((s) =>
     s.step_name === "agent_error" || s.step_name === "run_timeout" || s.step_name === "persistence_failed"
   );
+  // For the pipeline chips specifically: if the run ended on an error step
+  // (agent_error / tool_error / run_timeout), fall back to the last real
+  // work step so progress already confirmed by the backend still shows as
+  // passed, instead of the error step resetting every chip to pending.
+  const ERROR_STEP_NAMES = new Set(["agent_error", "tool_error", "run_timeout", "persistence_failed"]);
+  const pipelineStep = ERROR_STEP_NAMES.has(lastStep)
+    ? [...timeline].reverse().find((s) => !ERROR_STEP_NAMES.has(s.step_name))?.step_name ?? null
+    : lastStep;
+
+  // "Patients Screened" should reflect the actual search_patients result
+  // population (parsed from its detail text), not matches.length -- which
+  // is only the persisted PatientMatch records, i.e. a subset.
+  const searchStep = timeline.find((s) => s.step_name === "search_patients");
+  const screenedCount = searchStep?.detail?.match(/Found (\d+) patient/)?.[1];
+  const patientsScreened = screenedCount != null ? Number(screenedCount) : matches.length;
+
   const sceneStatusLabel = hasError
     ? "AGENT ERROR"
     : running
@@ -232,43 +255,34 @@ export default function TrialMind() {
   const linkedStudyIds = new Set(trials.map((t) => t.study_id).filter(Boolean));
   const linkableStudies = studies.filter((s) => !linkedStudyIds.has(s.id));
 
+  const confidencePct = currentTrial && currentTrial.criteria_count
+    ? Math.round((currentTrial.machine_checkable_count / currentTrial.criteria_count) * 100)
+    : 0;
+
   return (
     <div>
-      <div className="trialmind-hero">
-        <div className="trialmind-hero-kicker">TRIALMIND</div>
-        <h1 className="trialmind-hero-title">Autonomous Recruitment Engine</h1>
-        <p className="subtitle">
-          Protocol → AI Agent → Deterministic Eligibility → Evidence → Human Approval → Outreach Draft → Audit.
-          Deterministic rules decide; the agent retrieves evidence and explains its reasoning;
-          a coordinator approves before anything reaches a physician.
-        </p>
-      </div>
-
       {error && <div className="alert-box">{error}</div>}
 
-      <div className="agent-core-frame">
-        <div className="agent-live-scene">
-          <Suspense fallback={null}>
-            <AgentCoreScene lastStep={lastStep} running={running} hasError={hasError} />
-          </Suspense>
-          <div className="agent-live-scene-label">
-            <strong style={{ color: hasError ? "#ff8a8a" : undefined }}>{sceneStatusLabel}</strong>
-            <span>{sceneStepLabel}</span>
-          </div>
-        </div>
-        <div className="agent-core-pipeline">
-          <span className={lastStep === "protocol_loaded" || running ? "pipeline-step is-passed" : "pipeline-step"}>PROTOCOL</span>
-          <span className="pipeline-arrow">→</span>
-          <span className={["search_patients", "evaluate_eligibility"].includes(lastStep) ? "pipeline-step is-active" : "pipeline-step is-passed"}>PATIENTS</span>
-          <span className="pipeline-arrow">→</span>
-          <span className={["retrieve_evidence", "evidence_retrieved"].includes(lastStep) ? "pipeline-step is-active" : "pipeline-step"}>EVIDENCE</span>
-          <span className="pipeline-arrow">↓</span>
-          <span className={lastStep === "run_completed" ? "pipeline-step is-active" : "pipeline-step"}>HUMAN REVIEW</span>
-        </div>
-      </div>
+      <TrialMindConsole
+        lastStep={lastStep}
+        pipelineStep={pipelineStep}
+        running={running}
+        hasError={hasError}
+        justStarted={justStarted}
+        sceneStatusLabel={sceneStatusLabel}
+        sceneStepLabel={sceneStepLabel}
+        currentTrial={currentTrial}
+        patientCount={patients.length}
+        matchCount={matches.length}
+        confidencePct={confidencePct}
+        onRun={runAgent}
+        canRun={!!selectedTrial}
+        onToggleUpload={() => setShowUpload(!showUpload)}
+        showUpload={showUpload}
+      />
 
       <div className="section-heading">
-        <span className="section-heading-icon">🧬</span> Trials
+        <span className="section-heading-icon"><IconTrialMind /></span> Trials
       </div>
       <div className="agent-grid" style={{ marginBottom: 20 }}>
         {trials.map((t) => (
@@ -311,38 +325,35 @@ export default function TrialMind() {
         ))}
       </div>
 
-      <GlassCard>
-        {currentTrial?.study_id && sites.length > 0 && (
-          <div style={{ marginBottom: 10 }}>
-            <label style={{ fontSize: 12 }}>
-              Site to record approved candidates against (optional)
-            </label>
-            <select value={selectedSite} onChange={(e) => setSelectedSite(e.target.value)} disabled={running}>
-              <option value="">Unassigned / decide per candidate later</option>
-              {sites.map((s) => (
-                <option key={s.id} value={s.id}>{s.institution} ({s.site_code || `#${s.id}`})</option>
-              ))}
-            </select>
-            <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "4px 0 0" }}>
-              The AI searches the full patient directory by condition, as always. This only
-              sets which site a candidate is enrolled under once a coordinator approves them.
+      {currentTrial && (
+        <GlassCard>
+          {currentTrial?.study_id && sites.length > 0 && (
+            <div style={{ marginBottom: 10 }}>
+              <label style={{ fontSize: 12 }}>
+                Site to record approved candidates against (optional)
+              </label>
+              <select value={selectedSite} onChange={(e) => setSelectedSite(e.target.value)} disabled={running}>
+                <option value="">Unassigned / decide per candidate later</option>
+                {sites.map((s) => (
+                  <option key={s.id} value={s.id}>{s.institution} ({s.site_code || `#${s.id}`})</option>
+                ))}
+              </select>
+              <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "4px 0 0" }}>
+                The AI searches the full patient directory by condition, as always. This only
+                sets which site a candidate is enrolled under once a coordinator approves them.
+              </p>
+            </div>
+          )}
+          {currentTrial && !currentTrial.study_id && (
+            <p style={{ fontSize: 11.5, color: "var(--text-muted)", margin: 0 }}>
+              This protocol isn't linked to a CTMS study, so approved candidates won't be tied to
+              a study/site recruitment record. Link it to a study first if you want approvals to
+              feed the recruitment funnel.
             </p>
-          </div>
-        )}
-        {currentTrial && !currentTrial.study_id && (
-          <p style={{ fontSize: 11.5, color: "var(--text-muted)", marginBottom: 10 }}>
-            This protocol isn't linked to a CTMS study, so approved candidates won't be tied to
-            a study/site recruitment record. Link it to a study first if you want approvals to
-            feed the recruitment funnel.
-          </p>
-        )}
-        <GradientButton variant="ai" onClick={runAgent} disabled={running || !selectedTrial}>
-          {running ? "Agent running..." : "Run Matching Agent"}
-        </GradientButton>
-        <GradientButton variant="secondary" onClick={() => setShowUpload(!showUpload)} disabled={running}>
-          {showUpload ? "Cancel" : "Add Trial Protocol"}
-        </GradientButton>
-      </GlassCard>
+          )}
+        </GlassCard>
+      )}
+
 
       {showUpload && (
         <GlassCard>
@@ -420,11 +431,7 @@ export default function TrialMind() {
       )}
       <ActionTimeline steps={timeline} running={running} />
 
-      {!running && timeline.length > 0 && matches.length === 0 && !error && (
-        <GlassCard>No candidates were evaluated in this run.</GlassCard>
-      )}
-
-      {matches.length > 0 && (() => {
+      {(() => {
         const potential = matches.filter((m) => ["ELIGIBLE", "POTENTIAL_MATCH"].includes(m.verdict) && m.status !== "rejected");
         const excluded = matches.filter((m) => m.verdict === "NOT_ELIGIBLE");
         const needsReview = matches.filter((m) => m.verdict === "VERIFICATION_REQUIRED" && !potential.includes(m));
@@ -442,29 +449,44 @@ export default function TrialMind() {
 );
         return (
           <>
+            {/* Renders on any successful completed run, including a
+                zero-match one -- the signature flow's SUMMARY step is
+                part of "the agent finished", not conditional on finding
+                candidates. The empty-state message right below still
+                covers the zero-match case explicitly. */}
+            {!running && lastStep === "run_completed" && (
+              <RunCompleteSummary
+                screened={patientsScreened}
+                potential={potential.length}
+                needsReview={needsReview.length}
+              />
+            )}
+            {!running && timeline.length > 0 && matches.length === 0 && !error && (
+              <GlassCard>No candidates were evaluated in this run.</GlassCard>
+            )}
             {potential.length > 0 && (
-              <div>
+              <Reveal as="div">
                 <div className="section-heading" style={{ color: "var(--accent-emerald)" }}>
                   Potential Candidates ({potential.length})
                 </div>
                 {potential.map(cardFor)}
-              </div>
+              </Reveal>
             )}
             {needsReview.length > 0 && (
-              <div>
+              <Reveal as="div" delay={60}>
                 <div className="section-heading" style={{ color: "var(--accent-amber)" }}>
                   Needs Human Review ({needsReview.length})
                 </div>
                 {needsReview.map(cardFor)}
-              </div>
+              </Reveal>
             )}
             {excluded.length > 0 && (
-              <div>
+              <Reveal as="div" delay={120}>
                 <div className="section-heading" style={{ color: "var(--accent-red)" }}>
                   Excluded Candidates ({excluded.length})
                 </div>
                 {excluded.map(cardFor)}
-              </div>
+              </Reveal>
             )}
           </>
         );

@@ -1,15 +1,11 @@
 import { useEffect, useState } from "react";
+import { IconCheck, IconCross, IconWarning } from "./../design-system/icons.jsx";
+import HumanInLoopBadge from "./ui/HumanInLoopBadge.jsx";
 
 const STATUS_ICON = {
-  pass: "✓",
-  fail: "✗",
-  missing: "⚠",
-};
-
-const STATUS_COLOR = {
-  pass: "var(--accent-emerald)",
-  fail: "var(--accent-red)",
-  missing: "var(--accent-amber)",
+  pass: <IconCheck />,
+  fail: <IconCross />,
+  missing: <IconWarning />,
 };
 
 const VERDICT_LABEL = {
@@ -70,62 +66,78 @@ export default function CandidateCard({
   const requiresReview = match.verdict === "POTENTIAL_MATCH" || match.verdict === "VERIFICATION_REQUIRED";
   const isPendingDecision = match.status === "pending_review" && match.verdict !== "NOT_ELIGIBLE";
 
+  // The percentage shown is always derived from real criteria_results --
+  // never a fabricated "confidence" score the backend doesn't compute.
+  // Labeled "CRITERIA PASSED" throughout rather than "eligibility
+  // confidence" so it can't be misread as an AI certainty score.
+  //
+  // Color is driven by the verdict, not the raw percentage: 4/5 criteria
+  // passed is NOT necessarily "mostly eligible" if the one failed
+  // criterion was a disqualifying exclusion. The clinician's verdict
+  // already accounts for that, so the tone (green/amber/red) always
+  // reflects match.verdict -- the percentage stays a neutral fact next
+  // to it, never the thing coloring the decision.
+  const criteriaPct = totalCount > 0 ? Math.round((verifiedCount / totalCount) * 100) : null;
+  const verdictTone =
+    match.verdict === "ELIGIBLE" ? "is-eligible" :
+    match.verdict === "NOT_ELIGIBLE" ? "is-low" :
+    "is-partial"; // POTENTIAL_MATCH, VERIFICATION_REQUIRED
+  const barClass = criteriaPct == null ? "" : verdictTone;
+  const matchIdLabel = `MATCH / ${String(match.id).padStart(4, "0")}`;
+
   return (
-    <div className="card">
-      {/* Header */}
-      <div className="card-header">
-        <div>
-          <strong>
-            {patientName || `Patient #${match.patient_id}`}
-          </strong>
-
-          <span
-            className={`badge ${match.verdict}`}
-            style={{ marginLeft: 10 }}
-          >
-            {VERDICT_LABEL[match.verdict] || match.verdict}
-          </span>
+    <div className="card candidate-card">
+      {/* Header -- who, and where this candidate stands right now */}
+      <div className="candidate-card-header">
+        <div className="candidate-card-idline">
+          <span className="candidate-card-match-id">{matchIdLabel}</span>
+          <span className={`badge ${match.status}`}>{match.status.replace("_", " ")}</span>
         </div>
-
-        <span className={`badge ${match.status}`}>
-          {match.status.replace("_", " ")}
-        </span>
+        <div className="candidate-card-name">{patientName || `Patient #${match.patient_id}`}</div>
+        <div className="candidate-card-meta">
+          <span className={`badge ${match.verdict}`}>{VERDICT_LABEL[match.verdict] || match.verdict}</span>
+          {(match.study_id || siteName) && <span>{siteName ? `Site: ${siteName}` : "Study-scoped candidate"}</span>}
+        </div>
       </div>
 
-      {/* Study/site scope -- Priority 2: every recommendation is traceable
-          to the exact recruitment context it was generated for. */}
-      {(match.study_id || siteName) && (
-        <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 8px" }}>
-          {siteName ? `Site: ${siteName}` : "Study-scoped candidate"}
-        </p>
-      )}
-
-      {/* Criteria summary */}
-      <p
-        style={{
-          fontSize: 12,
-          color: "var(--text-secondary)",
-          margin: "4px 0 10px",
-        }}
-      >
-        Verified: {verifiedCount}/{totalCount} criteria
-        {missingInfo.length > 0 &&
-          ` · Missing/unverified: ${missingInfo.length}`}
-      </p>
+      {/* Eligibility panel -- the visual anchor. See it -> then inspect
+          why -> then decide, instead of having to read every criterion
+          just to find out where this candidate stands. */}
+      <div className="eligibility-panel">
+        <div className={`eligibility-panel-value ${criteriaPct == null ? "is-empty" : barClass}`}>
+          {criteriaPct == null ? "—" : `${criteriaPct}%`}
+        </div>
+        <div className="eligibility-panel-label">Criteria Passed</div>
+        {totalCount > 0 && (
+          <div className="eligibility-panel-bar">
+            <div className={`eligibility-panel-bar-fill ${barClass}`} style={{ width: `${criteriaPct}%` }} />
+          </div>
+        )}
+        <div className="eligibility-panel-fraction">
+          {verifiedCount} / {totalCount} criteria passed
+          {missingInfo.length > 0 && ` · ${missingInfo.length} unverified`}
+        </div>
+      </div>
 
       {/* WHY ELIGIBLE? -- structured evidence trace, one panel per
           criterion: patient value -> protocol requirement -> decision ->
           protocol source. This is the strongest technical differentiator
           (deterministic rule + traceable evidence, not an LLM guess), so
           it gets first billing over the free-text rationale below. */}
+      <div className="mc-section-heading">Eligibility Checks</div>
       <div className="evidence-trace">
         {(match.criteria_results || []).map((c, i) => {
           const { value, requirement } = splitDetail(c.detail);
           return (
             <div key={i} className="evidence-trace-item">
-              <div className="evidence-trace-label">
-                {c.label || `Criterion ${i + 1}`}
-                {c.crit_type === "exclusion" && " · exclusion check"}
+              <div className="evidence-trace-item-row">
+                <div className="evidence-trace-label" style={{ marginBottom: 0 }}>
+                  {c.label || `Criterion ${i + 1}`}
+                  {c.crit_type === "exclusion" && " · exclusion check"}
+                </div>
+                <span className={`evidence-trace-pill ${c.status}`}>
+                  {STATUS_ICON[c.status]} {c.status === "pass" ? "PASS" : c.status === "fail" ? "FAIL" : "REVIEW"}
+                </span>
               </div>
               {value && (
                 <div className="evidence-trace-row">
@@ -144,9 +156,6 @@ export default function CandidateCard({
                   <span>{c.detail}</span>
                 </div>
               )}
-              <div className="evidence-trace-decision" style={{ color: STATUS_COLOR[c.status] }}>
-                {STATUS_ICON[c.status]} {c.status === "pass" ? "PASS" : c.status === "fail" ? "FAIL" : "NEEDS VERIFICATION"}
-              </div>
               {c.source_text && (
                 <div className="evidence-trace-source">Protocol: "{c.source_text}"</div>
               )}
@@ -162,13 +171,12 @@ export default function CandidateCard({
         </div>
       )}
 
-      {/* Agent rationale */}
-      <p style={{ fontSize: 13 }}>
-        <strong>Agent rationale:</strong> {match.rationale}
-      </p>
+      {/* WHY THIS DECISION? -- agent rationale + any additional protocol
+          evidence retrieved by RAG, beyond the per-criterion sources
+          shown above. */}
+      <div className="mc-section-heading">Why This Decision?</div>
+      <p style={{ fontSize: 13, margin: "0 0 8px" }}>{match.rationale}</p>
 
-      {/* Additional protocol evidence retrieved by RAG, beyond the
-          per-criterion sources shown above */}
       {evidence.length > 0 ? (
         <details style={{ fontSize: 12, marginBottom: 10 }}>
           <summary
@@ -235,7 +243,10 @@ export default function CandidateCard({
       {isPendingDecision && (
         <div className="human-review-gate">
           <div className="human-review-gate-title">
-            {requiresReview ? "⚠ HUMAN REVIEW REQUIRED" : "HUMAN REVIEW"}
+            {requiresReview ? "HUMAN REVIEW REQUIRED" : "HUMAN REVIEW"}
+          </div>
+          <div style={{ margin: "2px 0 8px" }}>
+            <HumanInLoopBadge label="AI-assisted eligibility check — human decides" />
           </div>
           <div className="human-review-gate-summary">
             <div className="human-review-gate-stat">
@@ -263,12 +274,15 @@ export default function CandidateCard({
           />
           <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
             <button
-              className="reject"
+              className="tm-decisive tm-decisive-reject"
               onClick={() => onReject(match.id, reviewerNote)}
             >
               Reject
             </button>
-            <button onClick={() => onApprove(match.id, reviewerNote)}>
+            <button
+              className="tm-decisive tm-decisive-approve"
+              onClick={() => onApprove(match.id, reviewerNote)}
+            >
               Approve
             </button>
           </div>
@@ -305,6 +319,11 @@ export default function CandidateCard({
                 : "Outreach — DRAFT (editable)"}
             </strong>
           </p>
+          {!match.outreach_sent && (
+            <div style={{ margin: "-2px 0 8px" }}>
+              <HumanInLoopBadge label="AI-drafted email — edit and approve before sending" />
+            </div>
+          )}
 
           {!match.outreach_sent ? (
             <>

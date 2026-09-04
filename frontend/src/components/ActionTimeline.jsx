@@ -1,3 +1,5 @@
+import { IconCross } from "./../design-system/icons.jsx";
+
 const STEP_LABELS = {
   run_started: "Agent started",
   protocol_loaded: "Trial protocol loaded",
@@ -62,7 +64,7 @@ export default function ActionTimeline({ steps, running }) {
               <div
                 className={`agent-run-step-dot ${isError ? "is-error" : ""} ${isActive ? "is-pulsing" : ""}`}
               >
-                {isError ? "✗" : i + 1}
+                {isError ? <IconCross /> : i + 1}
               </div>
               <div className="agent-run-step-body">
                 <div className="agent-run-step-title" style={{ color: isError ? "var(--accent-red)" : "inherit" }}>

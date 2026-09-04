@@ -3,6 +3,11 @@ import { useParams, Link } from "react-router-dom";
 import api from "../api/client.js";
 import GlassCard from "../components/ui/GlassCard.jsx";
 import GradientButton from "../components/ui/GradientButton.jsx";
+import {
+  IconBuilding, IconPatients, IconWarning, IconCalendar, IconTrend,
+  IconDot, IconCheck, IconRegulatory, IconSearch, IconClipboard,
+  IconAlertCircle, IconFolder,
+} from "../design-system/icons.jsx";
 
 const TABS = ["Overview", "Sites", "Subjects", "Milestones", "Deviations", "Monitoring", "Safety"];
 
@@ -166,29 +171,29 @@ function OverviewTab({ detail, funnel, maxFunnel }) {
     <div>
       <div className="kpi-grid">
         <GlassCard className="kpi-card">
-          <div className="kpi-card-icon">🏢</div>
+          <div className="kpi-card-icon"><IconBuilding /></div>
           <div className="kpi-card-value">{detail.site_count}</div>
           <div className="kpi-card-label">Sites ({detail.activated_site_count} activated)</div>
         </GlassCard>
         <GlassCard className="kpi-card">
-          <div className="kpi-card-icon">🧑‍🤝‍🧑</div>
+          <div className="kpi-card-icon"><IconPatients /></div>
           <div className="kpi-card-value">{detail.subject_count}</div>
           <div className="kpi-card-label">Subjects on record</div>
         </GlassCard>
         <GlassCard className="kpi-card" glow={detail.open_deviation_count > 0 ? "warning" : undefined}>
-          <div className="kpi-card-icon">⚠️</div>
+          <div className="kpi-card-icon"><IconWarning /></div>
           <div className="kpi-card-value">{detail.open_deviation_count}</div>
           <div className="kpi-card-label">Open protocol deviations</div>
         </GlassCard>
         <GlassCard className="kpi-card" glow={detail.overdue_milestone_count > 0 ? "warning" : undefined}>
-          <div className="kpi-card-icon">📅</div>
+          <div className="kpi-card-icon"><IconCalendar /></div>
           <div className="kpi-card-value">{detail.overdue_milestone_count}</div>
           <div className="kpi-card-label">Overdue milestones</div>
         </GlassCard>
       </div>
 
       <div className="section-heading">
-        <span className="section-heading-icon">📈</span> Recruitment Funnel
+        <span className="section-heading-icon"><IconTrend /></span> Recruitment Funnel
       </div>
       <GlassCard>
         {funnel.map((f) => (
@@ -283,7 +288,7 @@ function SitesTab({ studyId, sites, onChange }) {
         </form>
       </GlassCard>
 
-      <div className="section-heading"><span className="section-heading-icon">🏢</span> Sites ({sites.length})</div>
+      <div className="section-heading"><span className="section-heading-icon"><IconBuilding /></span> Sites ({sites.length})</div>
       {sites.length === 0 && <GlassCard>No sites yet.</GlassCard>}
       <div className="agent-grid" style={{ marginTop: 12 }}>
         {sites.map((s) => (
@@ -404,7 +409,7 @@ function SubjectsTab({ studyId, subjects, sites, patients, onChange }) {
         </form>
       </GlassCard>
 
-      <div className="section-heading"><span className="section-heading-icon">🧑‍🤝‍🧑</span> Subjects ({subjects.length})</div>
+      <div className="section-heading"><span className="section-heading-icon"><IconPatients /></span> Subjects ({subjects.length})</div>
       {subjects.length === 0 && <GlassCard>No subjects yet.</GlassCard>}
       {subjects.map((s) => {
         const idx = SUBJECT_STATUSES.indexOf(s.status);
@@ -583,22 +588,22 @@ function MilestonesTab({ studyId, onChange: parentOnChange }) {
 
       <div className="kpi-grid">
         <GlassCard className="kpi-card">
-          <div className="kpi-card-icon">🟢</div>
+          <div className="kpi-card-icon"><IconDot color="var(--accent-emerald)" /></div>
           <div className="kpi-card-value">{timeline.summary.on_track}</div>
           <div className="kpi-card-label">On Track</div>
         </GlassCard>
         <GlassCard className="kpi-card" glow={timeline.summary.due_soon > 0 ? "warning" : undefined}>
-          <div className="kpi-card-icon">🟡</div>
+          <div className="kpi-card-icon"><IconDot color="var(--accent-amber)" /></div>
           <div className="kpi-card-value">{timeline.summary.due_soon}</div>
           <div className="kpi-card-label">Due Soon</div>
         </GlassCard>
         <GlassCard className="kpi-card" glow={timeline.summary.overdue > 0 ? "warning" : undefined}>
-          <div className="kpi-card-icon">🔴</div>
+          <div className="kpi-card-icon"><IconDot color="var(--accent-red)" /></div>
           <div className="kpi-card-value">{timeline.summary.overdue}</div>
           <div className="kpi-card-label">Overdue</div>
         </GlassCard>
         <GlassCard className="kpi-card">
-          <div className="kpi-card-icon">✅</div>
+          <div className="kpi-card-icon"><IconCheck /></div>
           <div className="kpi-card-value">{timeline.summary.completed}</div>
           <div className="kpi-card-label">Completed</div>
         </GlassCard>
@@ -637,12 +642,12 @@ function MilestonesTab({ studyId, onChange: parentOnChange }) {
         </form>
       </GlassCard>
 
-      <div className="section-heading"><span className="section-heading-icon">📅</span> Regulatory Timeline ({timeline.milestones.length})</div>
+      <div className="section-heading"><span className="section-heading-icon"><IconCalendar /></span> Regulatory Timeline ({timeline.milestones.length})</div>
       {timeline.milestones.length === 0 && <GlassCard>No milestones yet.</GlassCard>}
       {timeline.milestones.map((m) => (
         <GlassCard key={m.id} glow={m.due_status === "overdue" ? "warning" : undefined}>
           <div className="card-header">
-            <strong>{m.is_regulatory ? "⚖️ " : ""}{m.name}</strong>
+            <strong>{m.is_regulatory && <IconRegulatory style={{ marginRight: 5, verticalAlign: "-0.15em" }} />}{m.name}</strong>
             <div style={{ display: "flex", gap: 6 }}>
               {badge(m.status)}
               {m.due_status && badge(m.due_status)}
@@ -714,7 +719,7 @@ function DeviationsTab({ studyId, deviations, sites, onChange }) {
         </form>
       </GlassCard>
 
-      <div className="section-heading"><span className="section-heading-icon">⚠️</span> Protocol Deviations ({deviations.length})</div>
+      <div className="section-heading"><span className="section-heading-icon"><IconWarning /></span> Protocol Deviations ({deviations.length})</div>
       {deviations.length === 0 && <GlassCard>No deviations recorded.</GlassCard>}
       {deviations.map((d) => (
         <GlassCard key={d.id}>
@@ -786,7 +791,7 @@ function MonitoringTab({ studyId, visits, sites, onChange }) {
         </form>
       </GlassCard>
 
-      <div className="section-heading"><span className="section-heading-icon">🔍</span> Monitoring Visits ({visits.length})</div>
+      <div className="section-heading"><span className="section-heading-icon"><IconSearch /></span> Monitoring Visits ({visits.length})</div>
       {visits.length === 0 && <GlassCard>No monitoring visits recorded.</GlassCard>}
       {visits.map((v) => (
         <GlassCard key={v.id}>
@@ -890,17 +895,17 @@ function SafetyTab({ studyId, sites, subjects }) {
       {dash && (
         <div className="kpi-grid">
           <GlassCard className="kpi-card">
-            <div className="kpi-card-icon">🩹</div>
+            <div className="kpi-card-icon"><IconClipboard /></div>
             <div className="kpi-card-value">{dash.ae_count}</div>
             <div className="kpi-card-label">Adverse Events</div>
           </GlassCard>
           <GlassCard className="kpi-card" glow={dash.sae_count > 0 ? "warning" : undefined}>
-            <div className="kpi-card-icon">🚨</div>
+            <div className="kpi-card-icon"><IconAlertCircle /></div>
             <div className="kpi-card-value">{dash.sae_count}</div>
             <div className="kpi-card-label">Serious Adverse Events</div>
           </GlassCard>
           <GlassCard className="kpi-card">
-            <div className="kpi-card-icon">📂</div>
+            <div className="kpi-card-icon"><IconFolder /></div>
             <div className="kpi-card-value">{dash.open_cases}</div>
             <div className="kpi-card-label">Open Cases</div>
           </GlassCard>
@@ -990,7 +995,7 @@ function SafetyTab({ studyId, sites, subjects }) {
         </form>
       </GlassCard>
 
-      <div className="section-heading"><span className="section-heading-icon">📋</span> Cases ({dash?.total_cases ?? 0})</div>
+      <div className="section-heading"><span className="section-heading-icon"><IconClipboard /></span> Cases ({dash?.total_cases ?? 0})</div>
       {dash && dash.cases.length === 0 && <GlassCard>No AE/SAE cases recorded for this study yet.</GlassCard>}
       {dash && dash.cases.map((c) => {
         const idx = SAFETY_STATUS_FLOW.indexOf(c.status);
@@ -998,7 +1003,7 @@ function SafetyTab({ studyId, sites, subjects }) {
         return (
           <GlassCard key={c.id} glow={c.due_status === "overdue" ? "warning" : undefined}>
             <div className="card-header">
-              <strong>{c.is_serious ? "🚨 SAE" : "AE"} — {c.event_term}</strong>
+              <strong>{c.is_serious && <IconAlertCircle style={{ marginRight: 4, verticalAlign: "-0.15em" }} />}{c.is_serious ? "SAE" : "AE"} — {c.event_term}</strong>
               <div style={{ display: "flex", gap: 6 }}>
                 {safetyBadge(SAFETY_SEVERITY_BADGE, c.severity)}
                 {safetyBadge(SAFETY_STATUS_BADGE, c.status)}

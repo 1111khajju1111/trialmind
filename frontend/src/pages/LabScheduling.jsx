@@ -3,6 +3,7 @@ import api from "../api/client.js";
 import GlassCard from "../components/ui/GlassCard.jsx";
 import GradientButton from "../components/ui/GradientButton.jsx";
 import StatusBadge from "../components/ui/StatusBadge.jsx";
+import { IconWarning, IconFlask, IconMicroscope } from "../design-system/icons.jsx";
 
 export default function LabScheduling() {
   const [samples, setSamples] = useState([]);
@@ -34,7 +35,7 @@ export default function LabScheduling() {
 
       {alerts.map((a) => (
         <div className="alert-box-critical" key={a.sample_id}>
-          <span className="alert-box-critical-icon">⚠️</span>
+          <span className="alert-box-critical-icon"><IconWarning /></span>
           <div className="alert-box-critical-body">
             <div className="alert-box-critical-title">Storage Breach — Sample #{a.sample_id}</div>
             <div className="alert-box-critical-detail">{a.message}</div>
@@ -46,7 +47,7 @@ export default function LabScheduling() {
       ))}
 
       <div className="section-heading">
-        <span className="section-heading-icon">🧪</span> Equipment Status
+        <span className="section-heading-icon"><IconFlask /></span> Equipment Status
       </div>
       <div className="agent-grid" style={{ marginBottom: 20 }}>
         {equipment.map((e) => (
@@ -75,7 +76,7 @@ export default function LabScheduling() {
       </div>
 
       <div className="section-heading">
-        <span className="section-heading-icon">🔬</span> Samples
+        <span className="section-heading-icon"><IconMicroscope /></span> Samples
       </div>
       {samples.map((s) => (
         <GlassCard key={s.id} glow={s.breach_alert ? "warning" : undefined}>
@@ -93,7 +94,7 @@ export default function LabScheduling() {
           )}
           {s.breach_alert && (
             <p style={{ color: "var(--accent-red)", fontSize: 13, fontWeight: 600, margin: "8px 0 0" }}>
-              ⚠ Storage breach detected
+              <IconWarning style={{ marginRight: 4, verticalAlign: "-0.15em" }} />Storage breach detected
             </p>
           )}
         </GlassCard>
