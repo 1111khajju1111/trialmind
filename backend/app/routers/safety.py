@@ -22,7 +22,7 @@ from app.services import safety_signals as signal_svc
 from app.rbac import require_role
 import json
 
-router = APIRouter(prefix="/safety", tags=["pharmacovigilance"])
+router = APIRouter(prefix="/safety", tags=["pharmacovigilance"], dependencies=[Depends(require_role())])
 
 
 def _log(db: Session, study_id: int, step_name: str, detail: str):

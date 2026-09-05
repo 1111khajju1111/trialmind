@@ -13,8 +13,9 @@ from fastapi.responses import PlainTextResponse, Response
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.services import interop as interop_svc
+from app.rbac import require_role
 
-router = APIRouter(tags=["interoperability"])
+router = APIRouter(tags=["interoperability"], dependencies=[Depends(require_role())])
 
 
 @router.get("/interop/fhir/{resource}")

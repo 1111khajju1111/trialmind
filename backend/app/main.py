@@ -4,9 +4,9 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import Base, engine, SessionLocal, run_lightweight_migrations
 from app.config import settings
-from app.rbac import get_current_role, READ_ONLY_ROLES, ROLES
-from app.routers import patients, regulatory, lab, approvals, trials, audit, admin, studies, dashboard, safety, compliance, interop
-from app import mock_data
+from app.rbac import READ_ONLY_ROLES, ROLES
+from app.routers import patients, regulatory, lab, approvals, trials, audit, admin, studies, dashboard, safety, compliance, interop, auth as auth_router
+from app import mock_data, auth as auth_module
 
 logger = logging.getLogger("trialmind")
 logging.basicConfig(level=logging.INFO)
@@ -22,20 +22,16 @@ app.add_middleware(
 )
 
 
-@app.middleware("http")
-async def enforce_read_only_roles(request: Request, call_next):
-    """Priority 5 -- RBAC (thin, demo-appropriate). The Regulator role is
-    read-only by definition in the problem statement: enforced here, once,
-    for every route, rather than per-router, so a future write endpoint
-    can't accidentally forget to exclude it. See app/rbac.py for the full
-    explanation of why this is header-based rather than a real auth system."""
-    role = get_current_role(request.headers.get("x-user-role"))
-    if role in READ_ONLY_ROLES and request.method not in ("GET", "HEAD", "OPTIONS"):
-        return JSONResponse(
-            status_code=403,
-            content={"error": f"The '{role}' role has read-only access and cannot perform this action."},
-        )
-    return await call_next(request)
+# NOTE: read-only-role enforcement (Regulator can GET but not mutate) used
+# to live here as a global middleware that re-derived the role from the raw
+# X-User-Role header on every request -- independent of, and racing ahead
+# of, the session-based auth on each route. It's now folded into
+# require_role() itself (see app/rbac.py), so every route that calls
+# require_role() gets the read-only check for free, resolved the same
+# authenticated way (session first, header only as a demo_mode fallback)
+# as every other authorization decision. Routes that don't call
+# require_role() at all were never covered by a real auth story anyway;
+# see studies.py and patients.py, which now apply it at the router level.
 
 
 @app.exception_handler(Exception)
@@ -53,6 +49,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
     )
 
 
+app.include_router(auth_router.router)
 app.include_router(studies.router)
 app.include_router(dashboard.router)
 app.include_router(trials.router)
@@ -76,6 +73,22 @@ def list_roles():
 
 @app.on_event("startup")
 def on_startup():
+    auth_module.validate_demo_users_cover_all_roles()
+    # Deployment sanity check, not a hard gate: warn loudly (don't crash --
+    # a broken warning shouldn't be the thing that takes the app down) if
+    # this looks like a production boot (demo_mode=false) still running the
+    # placeholder secret from config.py's default / .env.example. This
+    # secret signs session tokens; leaving it at the shipped default would
+    # let anyone forge a valid-looking session offline.
+    if not settings.demo_mode and settings.auth_secret in (
+        "trialmind-demo-secret-change-me",
+        "change-me-in-production",
+    ):
+        logger.warning(
+            "AUTH_SECRET is still set to its placeholder value while "
+            "DEMO_MODE=false. Set a strong random AUTH_SECRET before "
+            "exposing this deployment."
+        )
     try:
         Base.metadata.create_all(bind=engine)
         run_lightweight_migrations()

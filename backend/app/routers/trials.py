@@ -8,8 +8,9 @@ from app.database import get_db
 from app import models
 from app.services.groq_client import ask_llm
 from app.services.rag_service import chunk_text
+from app.rbac import require_role
 
-router = APIRouter(prefix="/trials", tags=["trials"])
+router = APIRouter(prefix="/trials", tags=["trials"], dependencies=[Depends(require_role())])
 
 EXTRACTION_SYSTEM_PROMPT = (
     "You are a precise clinical trial criteria extractor.\n\n"

@@ -1,15 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 import { NavLink } from "react-router-dom";
 import { NAV_ITEMS } from "./navItems.js";
-import { useRole, ROLES } from "../../context/RoleContext.jsx";
+import { useRole } from "../../context/RoleContext.jsx";
+import { useAuth } from "../../context/AuthContext.jsx";
 import api from "../../api/client.js";
 import Icon, { IconMark, IconSettings } from "../../design-system/icons.jsx";
+import ThemeToggle from "./ThemeToggle.jsx";
 
 export default function TopNavigation() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [resetting, setResetting] = useState(false);
   const menuRef = useRef(null);
-  const { role, setRole, isReadOnly } = useRole();
+  const { role, isReadOnly } = useRole();
+  const { user, logout } = useAuth();
 
   useEffect(() => {
     function onClickOutside(e) {
@@ -61,16 +64,11 @@ export default function TopNavigation() {
         </div>
 
         <div className="topnav-actions">
-          <select
-            className="topnav-role-select"
-            value={role}
-            onChange={(e) => setRole(e.target.value)}
-            title="Acting role (Priority 5 — Role-Based Access). No login in this demo build; every API request carries this role and the backend enforces it."
-          >
-            {ROLES.map((r) => (
-              <option key={r} value={r}>{r}</option>
-            ))}
-          </select>
+          <ThemeToggle />
+          <div className="topnav-user" title={`Signed in as ${user?.username}`}>
+            <span className="topnav-user-role">{user?.display_name || role}</span>
+          </div>
+          <button className="topnav-logout" onClick={logout}>Log out</button>
           {isReadOnly && (
             <span className="badge normal" style={{ fontSize: 10 }} title="This role can view but not modify data.">
               READ-ONLY

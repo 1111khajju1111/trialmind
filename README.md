@@ -1,5 +1,31 @@
 # TrialMind — From Protocol to Patient
 
+## Recent UI/platform changes
+
+- **Login is now real, role-based authentication.** There's no more free
+  role dropdown -- the app is gated behind `/auth/login` (see
+  `backend/app/auth.py`). One demo account per RBAC role, all using the
+  password `trialmind123`: `pi`, `coordinator`, `monitor`, `ethics`,
+  `pharmacovigilance`, `admin`, `regulator`.
+- **Light theme by default, with a working dark/light toggle** in the top
+  nav and on the login screen (`ThemeContext.jsx`).
+- **Single dashboard.** The old standalone `/trialmind` screening page has
+  been folded directly into the main Dashboard (`/`) as the
+  `TrialMindWorkspace` component -- protocol upload, matching runs,
+  candidate review, and outreach all live on one page now. `/trialmind`
+  redirects to `/`.
+- **The Intelligence Core 3D visual is now just the DNA double-helix plus
+  one large central core sphere** -- the four workflow-node balls, the
+  comet-particle flow balls, and the error-burst balls have been removed
+  (`components/AgentCoreScene.jsx`).
+- **Outreach email sends immediately via Resend when you click Send** --
+  no more "Finalize (not sent)" holding step. This requires `RESEND_API_KEY`
+  to be set and `DEMO_MODE=false` (now the default); otherwise it still
+  falls back to a labeled, unsent draft so the app never silently no-ops.
+  Note this also means `/admin/reset` (Reset Demo Data) is disabled unless
+  you explicitly set `DEMO_MODE=true`, since that destructive endpoint is
+  intentionally gated on demo mode.
+
 ## SIH26046 implementation status
 
 | Priority | Scope | Status |
@@ -172,13 +198,23 @@ move it to `under_review` and then to a terminal `escalated` or
 
 `app/rbac.py` defines the seven SIH26046 roles (Principal Investigator,
 Study Coordinator, Monitor, Ethics Committee, Pharmacovigilance,
-Administrator, Regulator) and resolves the acting role from the
-`X-User-Role` header sent by the frontend's role switcher. A single
-`main.py` middleware enforces the `Regulator` role's read-only restriction
-globally, so no future write endpoint can forget to exclude it. This is
-deliberately a thin, demo-appropriate RBAC layer — no login/session/password
-— not a production identity provider; see `app/rbac.py`'s docstring for the
-full rationale.
+Administrator, Regulator). Role now comes from an authenticated login
+session, not a client-declared header: `POST /auth/login` (`app/auth.py`)
+issues a bearer token tied to the account's role, and `require_role()`
+resolves the acting role from that token, ignoring `X-User-Role` for
+authorization entirely -- a request can no longer grant itself
+`Administrator` by just setting a header. `X-User-Role` still exists as a
+narrow fallback used only when `settings.demo_mode` is true (fully offline
+demo runs, and the existing test suite), and by the read-only-role safety
+net in `main.py`'s middleware, which must stay non-authenticating since it
+runs on every request including unauthenticated ones like `/auth/login`.
+Every protected router endpoint depends on `require_role(...)`
+(specific roles) or `require_role()` (any authenticated user); the
+`Regulator` role's read-only restriction is additionally enforced globally
+via that same middleware, so no future write endpoint can forget to
+exclude it. See `app/rbac.py` and `app/auth.py`'s docstrings for the full
+rationale, and their module docstrings for exactly what `demo_mode` does
+and doesn't relax.
 
 ## Priority 6: Consent & Data Protection MVP
 
@@ -239,7 +275,9 @@ the UI, so no client can bypass it.
 
 Outreach is generated only after approval, and is always presented as
 **DRAFT — NOT SENT**: it's recorded for coordinator review, never
-transmitted automatically. In demo mode (the default), real email sending
+transmitted automatically. Outside demo mode (`DEMO_MODE=false`, the
+default), real email sending goes out via Resend once an outreach draft is
+approved and sent; in demo mode, real email sending
 is force-disabled even if a Resend API key happens to be configured — the
 demo should never be one misconfigured environment variable away from
 actually emailing a synthetic patient record.
@@ -257,7 +295,8 @@ it, what evidence supported it, and who approved it.
 
 ## Demo mode & reset
 
-`DEMO_MODE=true` (the default) labels the environment as synthetic data,
+`DEMO_MODE=true` (opt-in; `false` is the default -- see `app/config.py`)
+labels the environment as synthetic data,
 force-disables real outreach sending regardless of other configuration, and
 is required for `POST /admin/reset` to be reachable at all — a destructive
 "wipe everything and reseed" endpoint has no business being callable outside
@@ -397,8 +436,11 @@ described accordingly:
 - **Not a clinical decision-making system.** Deterministic checks and AI
   rationale support a human coordinator's review; they do not make or
   substitute for a clinical or regulatory eligibility determination.
-- **Simplified demo authentication.** Approvals are attributed to a single
-  hard-coded demo actor, not a real authenticated user/role system.
+- **Demo-scale authentication.** Login (`/auth/login`) is real -- a bearer
+  token tied to one of seven demo accounts (one per role, see
+  `app/auth.py`) -- but sessions are held in memory (a restart invalidates
+  them) and there's no password hashing/rotation/lockout. Fine for a
+  single-process demo deployment; not a production identity provider.
 - **No formal compliance validation.** The architecture includes
   compliance-oriented controls (audit logging, hard approval gates, a
   NOT_ELIGIBLE safety boundary) but has not undergone HIPAA / GxP / 21 CFR

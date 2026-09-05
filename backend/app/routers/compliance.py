@@ -10,8 +10,9 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.services import compliance as compliance_svc
+from app.rbac import require_role
 
-router = APIRouter(prefix="/compliance", tags=["compliance"])
+router = APIRouter(prefix="/compliance", tags=["compliance"], dependencies=[Depends(require_role())])
 
 
 @router.get("/alerts")

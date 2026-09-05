@@ -3,13 +3,18 @@ import { createContext, useContext, useEffect, useState } from "react";
 const RoleContext = createContext(null);
 const STORAGE_KEY = "aiia_role";
 
-// Priority 5 -- Role-Based Access + Audit (thin, demo-appropriate RBAC).
-// There is no login in this hackathon build: the coordinator picks their
-// acting role here, it's persisted locally, and every API request carries
-// it as the X-User-Role header (see api/client.js). The backend
-// (app/rbac.py) is the actual enforcement point -- this context only
-// drives which nav items/actions the UI offers, so the UI experience
-// matches what the API will actually allow.
+// Priority 5 -- Role-Based Access + Audit.
+// Login determines the role now (see AuthContext.jsx / app/auth.py):
+// /auth/login resolves it server-side from the account that signed in and
+// writes it here at login time. There is no free-standing role switcher
+// anymore -- this context's setRole exists only for the login/logout flow
+// to update it, not for arbitrary in-app role changes, and it no longer
+// drives backend authorization by itself. Every request also carries the
+// session's bearer token (see api/client.js), and the backend (app/rbac.py)
+// resolves the authoritative role from that token, not from the
+// X-User-Role header this context still populates -- that header is only
+// a legacy/demo-mode fallback now. This context's role is UI-only: which
+// nav items/actions to show, matching what the API will actually allow.
 export const ROLES = [
   "Principal Investigator",
   "Study Coordinator",
@@ -31,7 +36,7 @@ function getInitialRole() {
 }
 
 export function RoleProvider({ children }) {
-  const [role, setRole] = useState(getInitialRole);
+  const [role] = useState(getInitialRole);
 
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEY, role);
@@ -40,7 +45,7 @@ export function RoleProvider({ children }) {
   const isReadOnly = READ_ONLY_ROLES.has(role);
 
   return (
-    <RoleContext.Provider value={{ role, setRole, isReadOnly }}>
+    <RoleContext.Provider value={{ role, isReadOnly }}>
       {children}
     </RoleContext.Provider>
   );

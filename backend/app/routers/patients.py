@@ -10,8 +10,14 @@ from app.services.agent_orchestrator import run_agent
 import resend
 from pydantic import BaseModel, EmailStr
 from app.config import settings
+from app.rbac import require_role
 
-router = APIRouter(prefix="/patients", tags=["patient-matching"])
+# Router-level auth: patient data is the most sensitive thing this API
+# serves, and previously only the write endpoints (match/start, outreach,
+# send-outreach) were authenticated -- every GET, including patient lists
+# and match results, was reachable with no login at all. Requiring an
+# authenticated session (any role) at the router level closes that.
+router = APIRouter(prefix="/patients", tags=["patient-matching"], dependencies=[Depends(require_role())])
 
 OUTREACH_SYSTEM_PROMPT = (
     "You draft short, professional physician outreach messages for clinical "
@@ -64,8 +70,30 @@ def _persist_matches(
     evidence_cache: dict, rationales: dict,
     study_id: int | None = None, site_id: int | None = None,
 ):
+    """Persists one PatientMatch per newly-evaluated patient for this run.
+
+    Patients who already have a human-decided match (approved/rejected) on
+    this trial from an earlier run are skipped here rather than getting a
+    brand-new "pending_review" row -- otherwise every re-run of the
+    matching agent would resurface already-approved (or already-rejected)
+    candidates as if they needed review all over again, which is exactly
+    the "why is this approved candidate back in my pending list" confusion
+    coordinators were hitting. Their original decided match is untouched
+    and still visible via the system-wide match list / patient history.
+    """
+    already_decided_patient_ids = {
+        pid for (pid,) in db.query(models.PatientMatch.patient_id)
+        .filter(
+            models.PatientMatch.trial_id == trial_id,
+            models.PatientMatch.status.in_(["approved", "rejected"]),
+        )
+        .distinct()
+    }
+
     created = []
     for pid, elig in eligibility_cache.items():
+        if pid in already_decided_patient_ids:
+            continue
         patient = db.query(models.Patient).filter(models.Patient.id == pid).first()
         if not patient:
             continue
@@ -141,9 +169,16 @@ def _background_run(trial_id: int, run_id: str, allowed_patient_ids: set | None,
             db.commit()
             return
 
+        skipped = len(eligibility_cache) - len(created)
+        detail = f"Run complete -- {len(created)} candidate(s) persisted, awaiting human review."
+        if skipped > 0:
+            detail += (
+                f" {skipped} patient(s) already had an approved/rejected decision on this "
+                "trial from a previous run and were left as-is, not re-added for review."
+            )
         db.add(models.AgentAction(
             run_id=run_id, trial_id=trial_id, step_name="run_completed",
-            detail=f"Run complete -- {len(created)} candidate(s) persisted, awaiting human review."))
+            detail=detail))
         db.commit()
     finally:
         db.close()

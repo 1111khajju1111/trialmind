@@ -1,26 +1,31 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Header
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app import models, schemas
+from app import models, schemas, auth
 from app.services.recruitment import sync_subject_from_match
 from app.rbac import require_role
 
-router = APIRouter(prefix="/approvals", tags=["approvals"])
+router = APIRouter(prefix="/approvals", tags=["approvals"], dependencies=[Depends(require_role())])
 
 MODEL_MAP = {
     "patient_matching": models.PatientMatch,
     "regulatory": models.RegulatoryDraft,
 }
 
-# Hard-coded for the hackathon demo -- see README for the lightweight role
-# model this stands in for (Clinical Coordinator / Medical Writer / etc).
-# Swapping this for a real authenticated user is a P1 follow-up, not a
-# blocker for demo correctness.
+# Fallback actor label for approvals made without a logged-in session --
+# only reachable when settings.demo_mode allows the legacy header-only
+# path (see app/rbac.py), e.g. the existing test suite. A real logged-in
+# user is now attributed by username (see submit_approval below), not
+# hard-coded, now that /auth/login exists.
 DEMO_ACTOR = "demo_coordinator"
 
 
 @router.post("/", dependencies=[Depends(require_role("Principal Investigator", "Study Coordinator"))])
-def submit_approval(req: schemas.ApprovalRequest, db: Session = Depends(get_db)):
+def submit_approval(
+    req: schemas.ApprovalRequest,
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(default=None),
+):
     model_cls = MODEL_MAP.get(req.module)
     if not model_cls:
         return {"error": f"Unknown module '{req.module}'."}
@@ -64,11 +69,19 @@ def submit_approval(req: schemas.ApprovalRequest, db: Session = Depends(get_db))
     ]
     rationale = " | ".join(f"{label}: {text}" for label, text in labeled_parts) or None
 
+    # Attribute this decision to the actual logged-in user rather than a
+    # hard-coded placeholder, now that /auth/login exists. Falls back to
+    # DEMO_ACTOR only when there's no valid session -- reachable solely via
+    # the demo_mode header-only fallback (see app/rbac.py), e.g. the
+    # existing test suite that doesn't call /auth/login.
+    session = auth.session_from_authorization_header(authorization)
+    actor = session["username"] if session else DEMO_ACTOR
+
     log = models.ApprovalLog(
         module=req.module,
         record_id=req.record_id,
         action=req.action,
-        actor=DEMO_ACTOR,
+        actor=actor,
         rationale=rationale,
     )
     db.add(log)

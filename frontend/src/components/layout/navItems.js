@@ -6,10 +6,12 @@
 //
 // `icon` names resolve against the single icon family in
 // ../../design-system/icons.jsx (see ICONS map) -- no emoji here.
+// TrialMind's screening console (protocols, matching runs, candidate
+// review, outreach) is now part of the single Dashboard page rather than
+// its own nav item -- see pages/Dashboard.jsx.
 export const NAV_ITEMS = [
   { to: "/", label: "Dashboard", icon: "dashboard", end: true, roles: null },
   { to: "/studies", label: "Studies", icon: "studies", roles: null },
-  { to: "/trialmind", label: "TrialMind", icon: "trialmind", roles: ["Principal Investigator", "Study Coordinator"] },
   { to: "/patients", label: "Patients", icon: "patients", roles: ["Principal Investigator", "Study Coordinator", "Monitor"] },
   { to: "/safety", label: "Safety", icon: "safety", roles: ["Pharmacovigilance", "Principal Investigator", "Study Coordinator"] },
   { to: "/compliance", label: "Compliance", icon: "compliance", roles: ["Ethics Committee", "Study Coordinator", "Regulator"] },

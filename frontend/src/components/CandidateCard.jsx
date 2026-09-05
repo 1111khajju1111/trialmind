@@ -36,7 +36,6 @@ export default function CandidateCard({
   onSendOutreach,
 }) {
   const [emailTo, setEmailTo] = useState("");
-  const [showSendAdvanced, setShowSendAdvanced] = useState(false);
   const [sending, setSending] = useState(false);
   const [editedDraft, setEditedDraft] = useState(match.outreach_draft || "");
   const [reviewerNote, setReviewerNote] = useState("");
@@ -299,10 +298,11 @@ export default function CandidateCard({
         </button>
       )}
 
-      {/* Outreach Draft: Generate -> Edit -> Finalize is the primary,
-          human-controlled flow. Actually addressing/sending is a secondary,
-          "advanced" action tucked behind a toggle -- so a judge never reads
-          this as an AI that auto-emails physicians. */}
+      {/* Outreach Draft: Generate -> Edit -> Send. A coordinator can still
+          review and edit the AI-drafted text, but there's no separate
+          "finalize, but don't actually send" holding step anymore --
+          clicking Send addresses the email and transmits it via Resend
+          in one action (see /patients/{id}/send-outreach). */}
       {match.outreach_draft && (
         <div style={{ marginTop: 12 }}>
           <p
@@ -312,16 +312,12 @@ export default function CandidateCard({
             }}
           >
             <strong>
-              {match.outreach_status === "SENT"
-                ? "Outreach — SENT"
-                : match.outreach_status === "FINALIZED"
-                ? "Outreach — FINALIZED · NOT SENT"
-                : "Outreach — DRAFT (editable)"}
+              {match.outreach_status === "SENT" ? "Outreach — SENT" : "Outreach — DRAFT (editable)"}
             </strong>
           </p>
           {!match.outreach_sent && (
             <div style={{ margin: "-2px 0 8px" }}>
-              <HumanInLoopBadge label="AI-drafted email — edit and approve before sending" />
+              <HumanInLoopBadge label="AI-drafted email — review, edit if needed, then send" />
             </div>
           )}
 
@@ -347,55 +343,29 @@ export default function CandidateCard({
                 }}
               />
 
-              {!showSendAdvanced ? (
-                <div style={{ marginTop: 10 }}>
-                  <button
-                    className="secondary"
-                    onClick={() => setShowSendAdvanced(true)}
-                  >
-                    Finalize Outreach Draft
-                  </button>
-                  <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "6px 0 0" }}>
-                    Finalizing locks this draft as a coordinator-approved record. It does not
-                    email anyone by itself — no communication is sent automatically.
-                  </p>
-                </div>
-              ) : (
-                <div
-                  style={{
-                    marginTop: 10,
-                    padding: 10,
-                    border: "1px dashed var(--border)",
-                    borderRadius: 8,
-                  }}
+              <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <input
+                  type="email"
+                  placeholder="physician@hospital.com"
+                  value={emailTo}
+                  onChange={(e) => setEmailTo(e.target.value)}
+                  style={{ flex: 1, minWidth: 180, fontSize: 13 }}
+                />
+                <button
+                  className="primary"
+                  disabled={!emailTo.trim() || !editedDraft.trim() || sending}
+                  onClick={handleSend}
                 >
-                  <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 6px" }}>
-                    Advanced: physician email (for record only — demo mode never actually
-                    transmits an email; this only finalizes the draft).
-                  </p>
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    <input
-                      type="email"
-                      placeholder="physician@hospital.com"
-                      value={emailTo}
-                      onChange={(e) => setEmailTo(e.target.value)}
-                      style={{ flex: 1, minWidth: 180, fontSize: 13 }}
-                    />
-                    <button
-                      className="primary"
-                      disabled={!emailTo.trim() || !editedDraft.trim() || sending}
-                      onClick={handleSend}
-                    >
-                      {sending ? "Saving draft…" : "Confirm & Finalize"}
-                    </button>
-                  </div>
-                </div>
-              )}
+                  {sending ? "Sending via Resend…" : "Send Email"}
+                </button>
+              </div>
+              <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "6px 0 0" }}>
+                Sends immediately via Resend once you click Send — there's no additional
+                verification step after this.
+              </p>
             </>
           ) : (
             <>
-              {/* Terminal state -- text matches outreach_status, never
-                  overclaims a real transmission that didn't happen. */}
               <pre className="draft-content">
                 {match.outreach_draft}
               </pre>
@@ -404,13 +374,11 @@ export default function CandidateCard({
                 style={{
                   marginTop: 8,
                   fontSize: 12,
-                  color: match.outreach_status === "SENT" ? "var(--accent-emerald)" : "var(--accent-amber, #d9a441)",
+                  color: "var(--accent-emerald)",
                   fontWeight: 600,
                 }}
               >
-                {match.outreach_status === "SENT"
-                  ? "✓ Email sent."
-                  : "FINALIZED — NOT SENT. Recorded for coordinator review; no email was transmitted."}
+                ✓ Email sent via Resend.
               </div>
             </>
           )}

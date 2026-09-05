@@ -5,6 +5,7 @@ import DNADashboardHero from "../components/DNADashboardHero.jsx";
 import KPIGrid from "../components/dashboard/KPIGrid.jsx";
 import GlassCard from "../components/ui/GlassCard.jsx";
 import Reveal from "../design-system/Reveal.jsx";
+import TrialMindWorkspace from "../components/TrialMindWorkspace.jsx";
 import {
   IconStudies, IconPatients, IconRegulatory, IconLab, IconAudit,
   IconTrend, IconWarning, IconClock, IconCheck, IconBell,
@@ -177,14 +178,27 @@ export default function Dashboard() {
               {portfolio.active_studies} active {portfolio.active_studies === 1 ? "study" : "studies"},
               {" "}{stats?.pendingReview ?? 0} candidates waiting on a human decision
             </div>
-            <Link to="/trialmind" className="scenario-callout-link">
+            <a
+              href="#trialmind-workspace"
+              className="scenario-callout-link"
+              onClick={(e) => {
+                e.preventDefault();
+                document.getElementById("trialmind-workspace")?.scrollIntoView({ behavior: "smooth" });
+              }}
+            >
               Run the matching workflow <IconChevronRight />
-            </Link>
+            </a>
           </GlassCard>
         </Reveal>
       )}
 
-      {/* 05 -- agent activity: compact status list, not five equal cards. */}
+      {/* 05 -- TrialMind screening console, embedded directly here so
+          there is a single dashboard that covers everything the old
+          standalone /trialmind page used to (protocol upload, matching
+          runs, candidate review, outreach). */}
+      <TrialMindWorkspace />
+
+      {/* 06 -- agent activity: compact status list, not five equal cards. */}
       <Reveal>
         <div className="section-heading">
           <span className="section-heading-icon"><IconTrend /></span> Agent Activity

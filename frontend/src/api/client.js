@@ -2,18 +2,27 @@ import axios from "axios";
 import { getStoredRole } from "../context/RoleContext.jsx";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const TOKEN_KEY = "trialmind_auth_token";
 
 const client = axios.create({ baseURL: API_URL });
 
 // Priority 5 -- RBAC (thin, demo-appropriate). Every request carries the
-// coordinator's currently-selected role so the backend (app/rbac.py) can
-// enforce role-gated actions and the global read-only rule for Regulator.
+// logged-in user's role (set at login, see AuthContext.jsx) so the backend
+// (app/rbac.py) can enforce role-gated actions and the global read-only
+// rule for Regulator. The bearer token identifies the authenticated
+// session itself (see app/auth.py).
 client.interceptors.request.use((config) => {
   config.headers["X-User-Role"] = getStoredRole();
+  const token = window.localStorage.getItem(TOKEN_KEY);
+  if (token) config.headers["Authorization"] = `Bearer ${token}`;
   return config;
 });
 
 export const api = {
+  // authentication
+  login: (username, password) => client.post("/auth/login", { username, password }),
+  logout: () => client.post("/auth/logout"),
+
   // trials / protocol ingestion
   getTrials: () => client.get("/trials/"),
   

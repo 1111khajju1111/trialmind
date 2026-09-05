@@ -13,8 +13,9 @@ from app.database import get_db
 from app import models
 from app.services import safety as safety_svc
 from app.services import compliance as compliance_svc
+from app.rbac import require_role
 
-router = APIRouter(prefix="/dashboard", tags=["dashboard"])
+router = APIRouter(prefix="/dashboard", tags=["dashboard"], dependencies=[Depends(require_role())])
 
 
 @router.get("/portfolio")

@@ -2,8 +2,9 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app import models, schemas
+from app.rbac import require_role
 
-router = APIRouter(prefix="/lab", tags=["lab-scheduling"])
+router = APIRouter(prefix="/lab", tags=["lab-scheduling"], dependencies=[Depends(require_role())])
 
 
 @router.get("/samples", response_model=list[schemas.SampleOut])

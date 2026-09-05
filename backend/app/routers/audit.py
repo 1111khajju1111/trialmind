@@ -2,20 +2,26 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app import models
+from app.rbac import require_role
 
-router = APIRouter(prefix="/audit", tags=["audit"])
+router = APIRouter(prefix="/audit", tags=["audit"], dependencies=[Depends(require_role())])
 
 
 @router.get("/timeline/{run_id}")
 def get_timeline(run_id: str, db: Session = Depends(get_db)):
     """Returns every step the agent took during one run, in order --
-    powers the 'AI action timeline' UI from the project review."""
+    powers the 'AI action timeline' UI from the project review.
+    """
     actions = db.query(models.AgentAction).filter(
         models.AgentAction.run_id == run_id
     ).order_by(models.AgentAction.id.asc()).all()
+
     return [
         {
-            "id": a.id, "step_name": a.step_name, "detail": a.detail,
+            "id": a.id,
+            "run_id": a.run_id,
+            "step_name": a.step_name,
+            "detail": a.detail,
             "timestamp": a.timestamp.isoformat() if a.timestamp else None,
         }
         for a in actions

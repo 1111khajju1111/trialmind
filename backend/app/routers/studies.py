@@ -19,7 +19,13 @@ from app.services.recruitment import recompute_recruitment
 from app.services import compliance as compliance_svc
 from app.rbac import require_role
 
-router = APIRouter(prefix="/studies", tags=["studies"])
+# Router-level auth: every /studies/* route requires an authenticated
+# session (any role) at minimum -- previously only the mutating endpoints
+# individually declared require_role(), which left every GET (including
+# study/subject listings) reachable with no auth at all. Endpoints that
+# need a *specific* role beyond "logged in" still declare their own
+# require_role("...") below; that stacks fine on top of this.
+router = APIRouter(prefix="/studies", tags=["studies"], dependencies=[Depends(require_role())])
 
 MAX_CODE_LEN = 50
 MAX_TITLE_LEN = 300

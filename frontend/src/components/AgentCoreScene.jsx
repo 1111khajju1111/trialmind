@@ -1,5 +1,5 @@
 import { Canvas, useFrame } from "@react-three/fiber";
-import { Float, CatmullRomLine, Text } from "@react-three/drei";
+import { Float, CatmullRomLine } from "@react-three/drei";
 import { useRef, useMemo } from "react";
 
 // -----------------------------------------------------------------------
@@ -113,9 +113,11 @@ function Core({ phase }) {
       <group>
         {/* Wireframe shell: a mid-tone base color (rather than the old
             near-white) so the edges read as structure even where the
-            phase glow is faint, without an environment map to reflect. */}
+            phase glow is faint, without an environment map to reflect.
+            Enlarged so the core reads as the single "big ball" the
+            structure wraps around, rather than a small ornament. */}
         <mesh ref={shellRef}>
-          <icosahedronGeometry args={[1.15, 3]} />
+          <icosahedronGeometry args={[1.55, 3]} />
           <meshStandardMaterial
             ref={shellMatRef}
             color="#3a4a63"
@@ -128,9 +130,10 @@ function Core({ phase }) {
         </mesh>
         {/* Nucleus: dark charcoal base (not white/mirror) so it reads as
             a solid engine core lit by its own colored glow, reliably,
-            without depending on scene reflections. */}
+            without depending on scene reflections. A sphere (not an
+            octahedron) so the "big ball" reads unambiguously as a ball. */}
         <mesh ref={nucleusRef}>
-          <octahedronGeometry args={[0.46, 1]} />
+          <sphereGeometry args={[0.62, 32, 32]} />
           <meshStandardMaterial
             ref={nucleusMatRef}
             color="#1c2230"
@@ -141,149 +144,11 @@ function Core({ phase }) {
           />
         </mesh>
         <mesh ref={ringRef}>
-          <torusGeometry args={[1.55, 0.012, 8, 96]} />
+          <torusGeometry args={[2.0, 0.014, 8, 96]} />
           <meshBasicMaterial color={color} transparent opacity={0.75} />
         </mesh>
       </group>
     </Float>
-  );
-}
-
-// -----------------------------------------------------------------------
-// DATA-FLOW PARTICLES -- small comets streaming along a node's connection.
-// `direction: "in"` (protocol, patients) streams toward the core, so the
-// scene reads as "the agent is taking in protocol/patient data". `"out"`
-// (evidence, review) streams away from the core, reading as "evidence and
-// the decision are what the core produces". Positions are updated purely
-// via refs inside useFrame -- no React re-render per frame, so this stays
-// cheap even with several connections animating at once.
-// -----------------------------------------------------------------------
-function FlowParticles({ from, to, active, color, count = 5, speed = 0.55 }) {
-  const refs = useRef([]);
-  const offsets = useMemo(() => Array.from({ length: count }, (_, i) => i / count), [count]);
-
-  useFrame((state) => {
-    const t0 = (state.clock.elapsedTime * speed) % 1;
-    offsets.forEach((offset, i) => {
-      const mesh = refs.current[i];
-      if (!mesh) return;
-      if (!active) {
-        mesh.visible = false;
-        return;
-      }
-      mesh.visible = true;
-      const t = (t0 + offset) % 1;
-      mesh.position.set(
-        from[0] + (to[0] - from[0]) * t,
-        from[1] + (to[1] - from[1]) * t,
-        from[2] + (to[2] - from[2]) * t
-      );
-      // Comet-trail feel: fade in/out near each end of the run instead of
-      // popping in at full size.
-      const edgeFade = Math.min(t, 1 - t) * 4;
-      const scale = Math.min(1, edgeFade) * 0.075;
-      mesh.scale.setScalar(scale);
-    });
-  });
-
-  return (
-    <>
-      {offsets.map((_, i) => (
-        <mesh key={i} ref={(el) => (refs.current[i] = el)}>
-          <sphereGeometry args={[1, 8, 8]} />
-          <meshBasicMaterial color={color} transparent opacity={0.9} />
-        </mesh>
-      ))}
-    </>
-  );
-}
-
-// Error state: instead of a directed stream, a short burst of particles
-// scatters outward from the core in irregular directions -- reads as the
-// network being interrupted rather than continuing its normal flow.
-function ErrorBurst({ active }) {
-  const refs = useRef([]);
-  const dirs = useMemo(
-    () => Array.from({ length: 8 }, () => [
-      (Math.random() - 0.5) * 2,
-      (Math.random() - 0.5) * 2,
-      (Math.random() - 0.5) * 2,
-    ]),
-    []
-  );
-  useFrame((state) => {
-    if (!active) {
-      refs.current.forEach((m) => m && (m.visible = false));
-      return;
-    }
-    const t = (state.clock.elapsedTime * 0.9) % 1;
-    dirs.forEach((dir, i) => {
-      const mesh = refs.current[i];
-      if (!mesh) return;
-      mesh.visible = true;
-      const dist = t * 2.1;
-      mesh.position.set(dir[0] * dist, dir[1] * dist, dir[2] * dist);
-      mesh.scale.setScalar(Math.max(0, 0.07 * (1 - t)));
-    });
-  });
-  return (
-    <>
-      {dirs.map((_, i) => (
-        <mesh key={i} ref={(el) => (refs.current[i] = el)}>
-          <sphereGeometry args={[1, 6, 6]} />
-          <meshBasicMaterial color="#ff5d5d" transparent opacity={0.85} />
-        </mesh>
-      ))}
-    </>
-  );
-}
-
-// One workflow node. `active` drives a brightness ramp (via useFrame, not
-// a React re-render per frame) so state changes feel like a smooth pulse
-// rather than a jump cut.
-function Node({ position, label, color, activeColor, active, errored }) {
-  const matRef = useRef();
-  const targetRef = useRef(0.5);
-  useFrame((state) => {
-    targetRef.current = errored ? 1.5 : active ? 1.3 : 0.5;
-    if (matRef.current) {
-      matRef.current.emissiveIntensity +=
-        (targetRef.current - matRef.current.emissiveIntensity) * 0.08;
-      if (active) {
-        matRef.current.emissiveIntensity += Math.sin(state.clock.elapsedTime * 5) * 0.15;
-      }
-    }
-  });
-  return (
-    <group position={position}>
-      <Float speed={1.3} floatIntensity={0.4}>
-        <mesh>
-          <sphereGeometry args={[active ? 0.34 : 0.26, 24, 24]} />
-          <meshStandardMaterial
-            ref={matRef}
-            color={active ? activeColor : color}
-            emissive={errored ? "#d64555" : active ? activeColor : color}
-            emissiveIntensity={0.6}
-            metalness={0.3}
-            roughness={0.4}
-          />
-        </mesh>
-      </Float>
-      {/* Dark/charcoal label text -- the previous near-white color was
-          tuned for a black canvas and would be invisible on white. */}
-      <Text
-        position={[0, -0.55, 0]}
-        fontSize={label.length > 10 ? 0.19 : 0.24}
-        color={active ? "#12151c" : "#6b7488"}
-        anchorX="center"
-        anchorY="middle"
-        maxWidth={1.6}
-        textAlign="center"
-        letterSpacing={0.02}
-      >
-        {label}
-      </Text>
-    </group>
   );
 }
 
@@ -346,25 +211,7 @@ function HelixSpin({ children }) {
   return <group ref={ref}>{children}</group>;
 }
 
-// Protocol, Patients (inputs, feeding the core) and Evidence, Review
-// (outputs, produced by the core), placed along the double-helix backbone
-// -- alternating strands top to bottom -- so the arrangement reads as a
-// DNA ladder (Protocol -> Patients -> Evidence -> Human Review) wrapped
-// around the Intelligence Core at its center, rather than a flat cross of
-// four dots. Deepened/more saturated colors than the original pastel set
-// so each node stays legible against a white canvas.
-const NODE_DEFS = [
-  { key: "protocol", position: helixPoint(0.1, 0), label: "PROTOCOL", color: "#8b93a6", activeColor: "#0ea5b8", direction: "in" },
-  { key: "patients", position: helixPoint(0.38, 1), label: "PATIENTS", color: "#8b93a6", activeColor: "#5b6fe0", direction: "in" },
-  { key: "evidence", position: helixPoint(0.62, 0), label: "EVIDENCE", color: "#8b93a6", activeColor: "#c98a1d", direction: "out" },
-  { key: "review", position: helixPoint(0.9, 1), label: "HUMAN REVIEW", color: "#8b93a6", activeColor: "#d9622f", direction: "out" },
-];
-const ORIGIN = [0, 0, 0];
-
-function Scene({ phase, activeNode }) {
-  const errored = phase === "error";
-  const allSettled = phase === "completed";
-
+function Scene({ phase }) {
   return (
     <>
       {/* Lighting retuned for a transparent canvas over a white/off-white
@@ -376,58 +223,13 @@ function Scene({ phase, activeNode }) {
       <pointLight position={[-3, -2, 2]} intensity={7} color="#eef0ff" />
       <pointLight position={[0, 5, -4]} intensity={5} color="#ffffff" />
 
+      {/* Just two elements, per the simplified visual brief: the DNA
+          double-helix structure, and one big ball (the Intelligence Core)
+          at its center. No workflow node spheres, no comet-particle
+          balls, no error-burst balls scattered around it. */}
       <HelixSpin>
         <HelixBackbone />
         <Core phase={phase} />
-
-        {NODE_DEFS.map((node) => {
-          const isActive = allSettled || activeNode === node.key;
-          return (
-            <Node
-              key={node.key}
-              position={node.position}
-              label={node.label}
-              color={node.color}
-              activeColor={node.activeColor}
-              active={isActive}
-              errored={errored}
-            />
-          );
-        })}
-
-        {NODE_DEFS.map((node) => (
-          <CatmullRomLine
-            key={`line-${node.key}`}
-            points={[[0, 0, 0], node.position.map((v) => v * 0.5), node.position]}
-            color={errored ? "#d64555" : allSettled || activeNode === node.key ? node.activeColor : "#c3c9d6"}
-            lineWidth={allSettled || activeNode === node.key ? 2 : 1}
-          />
-        ))}
-
-        {/* Directional data flow: input nodes stream toward the core while
-            they're active; output nodes stream away from the core once the
-            run has moved past evaluation, i.e. evidence/decision are what
-            the core is now producing. During "completed", every connection
-            carries a slow, faint flow -- the network settling into a state
-            where the whole path is visibly a live system, not four inert
-            dots around a shape. */}
-        {!errored && NODE_DEFS.map((node) => {
-          const isActive = allSettled || activeNode === node.key;
-          const [from, to] = node.direction === "in" ? [node.position, ORIGIN] : [ORIGIN, node.position];
-          return (
-            <FlowParticles
-              key={`flow-${node.key}`}
-              from={from}
-              to={to}
-              active={isActive}
-              color={node.activeColor}
-              speed={allSettled ? 0.22 : 0.6}
-              count={allSettled ? 3 : 5}
-            />
-          );
-        })}
-
-        <ErrorBurst active={errored} />
       </HelixSpin>
 
       {/* No CameraControls: the operational dashboard/console must stay
@@ -449,7 +251,7 @@ function Scene({ phase, activeNode }) {
 // `hasError` -- the scene derives its own phase/active-node from those,
 // so callers never need to know the visual vocabulary.
 export default function AgentCoreScene({ lastStep = null, running = false, hasError = false }) {
-  const { phase, activeNode } = useMemo(
+  const { phase } = useMemo(
     () => deriveSceneState({ lastStep, running, hasError }),
     [lastStep, running, hasError]
   );
@@ -467,7 +269,7 @@ export default function AgentCoreScene({ lastStep = null, running = false, hasEr
       dpr={isLowPower ? 1 : [1, 2]}
       shadows={!isLowPower}
     >
-      <Scene phase={phase} activeNode={activeNode} />
+      <Scene phase={phase} />
     </Canvas>
   );
 }
