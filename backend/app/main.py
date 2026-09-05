@@ -95,6 +95,7 @@ def on_startup():
         db = SessionLocal()
         try:
             mock_data.seed_if_empty(db)
+            mock_data.seed_additional_demo_data(db)
         finally:
             db.close()
     except Exception as e:
