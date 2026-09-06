@@ -18,6 +18,24 @@ from app.rbac import require_role
 router = APIRouter(prefix="/dashboard", tags=["dashboard"], dependencies=[Depends(require_role())])
 
 
+def _data_quality_summary(db: Session):
+    """Return actionable completeness checks using the existing CTMS schema."""
+    patients = db.query(models.Patient).all()
+    subjects = db.query(models.StudySubject).all()
+    cases = db.query(models.SafetyCase).all()
+    missing_patient_biomarkers = sum(1 for p in patients if not (p.biomarkers or "").strip())
+    missing_patient_location = sum(1 for p in patients if not (p.location or "").strip())
+    consent_gaps = sum(1 for s in subjects if s.status != "screened" and s.consent_status != "obtained")
+    safety_narrative_gaps = sum(1 for c in cases if not (c.narrative or "").strip())
+    checks = [
+        {"code":"PATIENT_BIOMARKERS","label":"Patients missing biomarker data","count":missing_patient_biomarkers,"severity":"warning" if missing_patient_biomarkers else "ok"},
+        {"code":"PATIENT_LOCATION","label":"Patients missing location","count":missing_patient_location,"severity":"warning" if missing_patient_location else "ok"},
+        {"code":"CONSENT_GAPS","label":"Active subjects without obtained consent","count":consent_gaps,"severity":"critical" if consent_gaps else "ok"},
+        {"code":"SAFETY_NARRATIVE","label":"Safety cases missing narrative","count":safety_narrative_gaps,"severity":"warning" if safety_narrative_gaps else "ok"},
+    ]
+    return {"checks": checks, "open_checks": sum(1 for c in checks if c["count"] > 0)}
+
+
 @router.get("/portfolio")
 def get_portfolio(db: Session = Depends(get_db)):
     studies = db.query(models.Study).all()
@@ -75,11 +93,11 @@ def get_portfolio(db: Session = Depends(get_db)):
         "regulatory_alert_count": regulatory_alert_count,
         "monitoring_alert_count": monitoring_alert_count,
         "safety_module_available": True,
-        # Not yet implemented -- the data-quality module (Priority 3 table
-        # also lists "Data-quality queries" but it isn't part of the
-        # pharmacovigilance MVP). Surfaced explicitly so the UI can show
-        # "coming soon" instead of a misleading 0.
-        "data_quality_module_available": False,
+        # Lightweight data-quality monitoring is computed from existing CTMS
+        # entities. This is intentionally a completeness/integrity check, not
+        # a fabricated EDC query count.
+        "data_quality_module_available": True,
+        "data_quality": _data_quality_summary(db),
         "studies": [
             {
                 "id": s.id,

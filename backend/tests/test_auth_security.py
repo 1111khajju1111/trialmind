@@ -32,18 +32,14 @@ from app.main import app
 
 
 @pytest.fixture
-def client():
+def client(test_engine):
     # Force the real-auth path for this file regardless of the
     # conftest.py-wide DEMO_MODE=true default -- these tests are exactly
     # the ones meant to prove the fallback being OFF works correctly.
     original_demo_mode = settings.demo_mode
     settings.demo_mode = False
 
-    engine = create_engine(
-        "sqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
+    engine = test_engine
     Base.metadata.create_all(bind=engine)
     TestSessionLocal = sessionmaker(bind=engine)
 

@@ -109,12 +109,8 @@ def _make_scripted_llm(hyperlipidemia_patients):
 
 
 @pytest.fixture
-def golden_client(monkeypatch):
-    engine = create_engine(
-        "sqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
+def golden_client(monkeypatch, test_engine):
+    engine = test_engine
     Base.metadata.create_all(bind=engine)
     TestSessionLocal = sessionmaker(bind=engine)
 

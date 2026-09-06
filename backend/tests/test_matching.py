@@ -30,23 +30,13 @@ from app.services.agent_orchestrator import run_agent
 
 
 @pytest.fixture
-def db_session():
-    # Fix (Priority 0 -- database test isolation): every other test file in
-    # this suite pins poolclass=StaticPool for its in-memory SQLite engine;
-    # this one didn't. Without it, SQLAlchemy's default for a `:memory:`
-    # URL is SingletonThreadPool (one connection *per thread*, reused up to
-    # pool_size before being recycled) rather than a single connection for
-    # the whole engine's lifetime -- correct enough for a short-lived
-    # single-threaded test, but it's an unpinned implicit default, not a
-    # guarantee, and inconsistent with the rest of the suite. StaticPool
-    # makes "one shared in-memory database for this engine" an explicit
-    # property of the fixture instead of an artifact of SQLAlchemy's
-    # dialect-selection logic.
-    engine = create_engine(
-        "sqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
+def db_session(test_engine):
+    # Isolation for this fixture's engine now comes from the shared
+    # `test_engine` fixture (see conftest.py) -- which pins StaticPool for
+    # its default in-memory SQLite engine for exactly the reason described
+    # below, and additionally supports running this same suite against a
+    # real Postgres instance via TEST_DATABASE_URL.
+    engine = test_engine
     Base.metadata.create_all(bind=engine)
     SessionLocal = sessionmaker(bind=engine)
     session = SessionLocal()

@@ -35,10 +35,11 @@ export default function Dashboard() {
       api.getTrials(),
       api.getMatches(),
       api.getDrafts(),
+      api.getPatients(),
       api.getAlerts(),
       api.getPortfolio(),
     ])
-      .then(([logRes, trialsRes, matchesRes, draftsRes, alertsRes, portfolioRes]) => {
+      .then(([logRes, trialsRes, matchesRes, draftsRes, patientsRes, alertsRes, portfolioRes]) => {
         setLog(logRes.data);
         setAlerts(alertsRes.data);
         setPortfolio(portfolioRes.data);
@@ -46,6 +47,7 @@ export default function Dashboard() {
         const drafts = draftsRes.data;
         setStats({
           trials: trialsRes.data.length,
+          totalPatients: patientsRes.data.length,
           patientsAnalyzed: matches.length,
           potentialMatches: matches.filter(
             (m) => m.verdict === "POTENTIAL_MATCH" || m.verdict === "ELIGIBLE"
@@ -101,7 +103,7 @@ export default function Dashboard() {
   // "what is happening right now" before the user scrolls at all.
   const heroStrip = stats && portfolio ? [
     { value: portfolio.active_studies, label: "Active Studies" },
-    { value: stats.patientsAnalyzed, label: "Candidates Screened" },
+    { value: stats.patientsAnalyzed, label: "Match Decisions" },
     { value: stats.potentialMatches, label: "Evidence-Backed Matches" },
     { value: stats.pendingReview, label: "Pending Review" },
     { value: log.length, label: "Audit Events" },
@@ -111,6 +113,34 @@ export default function Dashboard() {
     <div>
       {/* 02 -- DNA intelligence hero: one dominant visual, no parallax. */}
       <DNADashboardHero strip={heroStrip} />
+
+      <Reveal as="div">
+        <GlassCard glow="ai" style={{ marginBottom: 28, border: "2px solid var(--accent-cyan)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 20, alignItems: "center", flexWrap: "wrap" }}>
+            <div>
+              <div style={{ fontSize: 11, letterSpacing: "0.16em", textTransform: "uppercase", color: "var(--accent-cyan)", fontWeight: 800 }}>AIIA Clinical Research Command Center</div>
+              <h1 style={{ margin: "6px 0 4px", fontSize: "clamp(24px, 3vw, 38px)" }}>From study start to close-out</h1>
+              <p className="subtitle" style={{ margin: 0 }}>CTMS operations, TrialMind intelligence, pharmacovigilance and regulatory control in one portfolio view.</p>
+            </div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <Link style={{ padding: "9px 14px", border: "1px solid var(--border-strong)", color: "var(--text-primary)", textDecoration: "none", fontWeight: 700, fontSize: 12 }} to="/studies">Studies</Link>
+              <Link style={{ padding: "9px 14px", border: "1px solid var(--border-strong)", color: "var(--text-primary)", textDecoration: "none", fontWeight: 700, fontSize: 12 }} to="/compliance">Compliance</Link>
+              <Link style={{ padding: "9px 14px", border: "1px solid var(--border-strong)", color: "var(--text-primary)", textDecoration: "none", fontWeight: 700, fontSize: 12 }} to="/safety">Safety</Link>
+            </div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(120px,1fr))", gap: 8, marginTop: 20 }}>
+            {[
+              ["01", "Protocol"], ["02", "IEC"], ["03", "CTRI"], ["04", "Sites"],
+              ["05", "Recruit"], ["06", "Monitor"], ["07", "Safety"], ["08", "Close-out"]
+            ].map(([n,label]) => (
+              <div key={n} style={{ padding: "10px 12px", border: "1px solid var(--border-subtle)", background: "var(--surface-1)" }}>
+                <div style={{ fontSize: 10, color: "var(--text-muted)" }}>{n}</div>
+                <div style={{ fontWeight: 750, marginTop: 3 }}>{label}</div>
+              </div>
+            ))}
+          </div>
+        </GlassCard>
+      </Reveal>
 
       {error && <div className="alert-box">{error}</div>}
       {loading && <p className="loading">Loading...</p>}
@@ -306,11 +336,13 @@ export default function Dashboard() {
                     Pharmacovigilance KPIs not available yet.
                   </p>
                 )}
-                {!portfolio.data_quality_module_available && (
-                  <p style={{ fontSize: 11.5, color: "var(--text-muted)", margin: "-6px 0 16px" }}>
-                    Data-quality query counts arrive with a later priority -- not shown yet rather than
-                    shown as a misleading zero.
-                  </p>
+                {portfolio.data_quality_module_available && (
+                  <div style={{ margin: "-4px 0 18px", padding: "12px 14px", border: "1px solid var(--border-subtle)", background: "var(--surface-1)" }}>
+                    <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-secondary)", marginBottom: 6 }}>Data quality monitor</div>
+                    <div style={{ fontSize: 12.5, color: portfolio.data_quality.open_checks ? "var(--accent-amber)" : "var(--accent-emerald)" }}>
+                      {portfolio.data_quality.open_checks ? `${portfolio.data_quality.open_checks} completeness checks need attention` : "All configured completeness checks clear"}
+                    </div>
+                  </div>
                 )}
 
                 <div className="section-heading">
@@ -319,7 +351,8 @@ export default function Dashboard() {
                 <KPIGrid
                   items={[
                     { icon: <IconPatients />, label: "Active Trials", value: stats?.trials ?? 0, glow: "ai" },
-                    { icon: <IconSearch />, label: "Patients Analyzed", value: stats?.patientsAnalyzed ?? 0 },
+                    { icon: <IconSearch />, label: "Match Decisions", value: stats?.patientsAnalyzed ?? 0 },
+                    { icon: <IconPatients />, label: "Patient Records", value: stats?.totalPatients ?? 0 },
                     { icon: <IconCheck />, label: "Potential / Eligible Matches", value: stats?.potentialMatches ?? 0, glow: "success" },
                     { icon: <IconClock />, label: "Pending Review", value: stats?.pendingReview ?? 0, glow: (stats?.pendingReview ?? 0) > 0 ? "warning" : undefined },
                   ]}

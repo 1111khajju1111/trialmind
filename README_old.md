@@ -293,32 +293,6 @@ log entry carries the run ID, a timestamp, and (for approvals) the acting
 coordinator, so any decision can be traced end-to-end: which run produced
 it, what evidence supported it, and who approved it.
 
-### ALCOA+ mapping
-
-PS26046 names ALCOA+ explicitly as the data-integrity standard this
-platform is expected to meet. Concretely, per principle:
-
-| Principle | Where it's implemented |
-|---|---|
-| **A**ttributable | `ApprovalLog.actor` is the real logged-in username, resolved server-side from the bearer-token session issued by `/auth/login` (`app/routers/approvals.py`) — not a client-declared header, and not a hard-coded placeholder. (The only exception is the legacy `demo_coordinator` fallback, reachable solely when there's no session at all and `DEMO_MODE=true` — see the caveat below.) |
-| **L**egible | Audit records are structured fields (`module`, `record_id`, `action`, `actor`, `rationale`), and `rationale` itself is human-readable prose — the AI's own rationale and the reviewer's note, each explicitly labeled and concatenated (`"AI rationale: ... \| Reviewer note: ..."`) — not an opaque code. |
-| **C**ontemporaneous | Timestamps are set server-side at commit time (SQLAlchemy `server_default`/`default=func.now()`-style columns), never accepted from the client, so a request can't backdate or forge when a decision was made. |
-| **O**riginal | The AI's rationale and the reviewer's note are stored as two distinct, separately-labeled fields, side by side — a reviewer's note is appended, not overwritten onto the AI's original output. |
-| **A**ccurate | Eligibility verdicts come from a deterministic rules engine (age/BMI/biomarker/lab-value checks against protocol criteria — `app/services/eligibility.py`-style logic); the LLM is confined to rationale text and evidence summarization and never overrides a computed verdict. "Accurate" therefore doesn't depend on model output being correct, only the deterministic checks. |
-| **C**omplete | Each `PatientMatch`/audit entry links the record, the full criteria-by-criteria results, the retrieved evidence, and the human decision together (see `criteria_results`, `evidence`, `rationale` on `PatientMatch`) — not a bare approved/rejected flag with no supporting detail. |
-| **C**onsistent | One shared audit schema (`ApprovalLog` for decisions, `AgentAction` for run-timeline events) is used across every module this app supports (patient matching, regulatory drafts, safety signals) — one format to review, not a different log shape per feature. |
-| **E**nduring | Persisted to PostgreSQL (see `psycopg2-binary` in `requirements.txt` and the deployed `DATABASE_URL`), not in-memory state that's lost on redeploy or restart. |
-| **A**vailable | Exposed on demand via role-gated read endpoints — `GET /audit/timeline/{run_id}`, `GET /audit/runs`, `GET /approvals/log` — reviewable by an authorized user whenever needed, not locked away in server-only logs. |
-
-**Caveat, stated rather than hidden:** `POST /admin/reset` does wipe
-`ApprovalLog` and `AgentAction` rows as part of resetting the demo dataset.
-This is a demo-only convenience, not a production posture: it's
-Administrator-role-gated *and* additionally hard-disabled whenever
-`DEMO_MODE=false` (see `app/routers/admin.py`) — there is no "wipe the
-audit trail" button available outside an explicit demo configuration. A
-real deployment handling real patient data runs with `DEMO_MODE=false`,
-which removes this endpoint from the API surface entirely.
-
 ## Demo mode & reset
 
 `DEMO_MODE=true` (opt-in; `false` is the default -- see `app/config.py`)
@@ -354,16 +328,6 @@ criteria genuinely need a human.
 
 ## Testing
 
-![Backend tests (PostgreSQL)](https://github.com/OWNER/REPO/actions/workflows/backend-tests.yml/badge.svg)
-<!-- Replace OWNER/REPO above with this repo's actual GitHub path once
-     pushed -- this badge tracks .github/workflows/backend-tests.yml,
-     which runs the full suite below against a real PostgreSQL service
-     container on every push, not just SQLite (see "Testing against
-     PostgreSQL" further down). A green badge here is a concrete,
-     unfakeable signal that the suite passes against the same database
-     engine the app runs on in production (Render), not only the faster
-     SQLite default used for local iteration. -->
-
 ```bash
 cd backend
 pip install -r requirements.txt -r requirements-dev.txt
@@ -395,35 +359,6 @@ pytest -v
 All of these mock the Groq client, so the full suite runs with no network
 access and no API key — safe for CI and for a final check before walking
 into a demo.
-
-### Testing against PostgreSQL, not just SQLite
-
-Every test file gets its database engine from one shared `test_engine`
-fixture in `tests/conftest.py`, which defaults to an in-memory SQLite
-engine (fast, and isolated for free). Point the *entire* suite at a real
-PostgreSQL instance instead by setting `TEST_DATABASE_URL` — no test file
-needs to change:
-
-```bash
-docker run -d --name trialmind-test-pg \
-  -e POSTGRES_USER=trialmind -e POSTGRES_PASSWORD=trialmind_test \
-  -e POSTGRES_DB=trialmind_test -p 5432:5432 postgres:16
-
-export TEST_DATABASE_URL=postgresql://trialmind:trialmind_test@localhost:5432/trialmind_test
-cd backend
-pytest -v
-```
-
-This matters because SQLite and PostgreSQL genuinely don't behave
-identically — JSON column handling, array/enum types, case-sensitivity of
-text comparisons, and constraint enforcement can all differ. A suite
-that's 100% green against SQLite can still break against the Postgres this
-app actually runs on in production (`psycopg2-binary` in
-`requirements.txt`, and the deployed `DATABASE_URL` on Render) — so a
-SQLite-only green run and "works on the real deployment" are two separate
-claims. `.github/workflows/backend-tests.yml` runs this exact
-Postgres-backed configuration on every push, which is the check to trust
-over a local SQLite-only run.
 
 ```bash
 cd frontend
@@ -489,29 +424,6 @@ cp .env.example .env   # set VITE_API_URL=http://localhost:8000
 npm install
 npm run dev
 ```
-
-### 5. Post-deploy smoke test
-
-Passing tests locally (even against Postgres) is still not the same claim
-as "the live deployment works" — env vars, CORS, and cold-start behavior
-only show up once it's actually deployed. Run this against the real
-Vercel + Render URLs, not localhost, after every deploy:
-
-1. **Auth, no-token rejection.** With no `Authorization` header, `GET
-   <backend-url>/dashboard/portfolio` should return `401`, not a silent
-   `500` or a CORS failure. A CORS failure here almost always means
-   `CORS_ORIGINS` on Render doesn't exactly match the deployed Vercel URL.
-2. **Each role logs in correctly.** Log in as all seven demo accounts
-   (`pi`, `coordinator`, `monitor`, `ethics`, `pharmacovigilance`, `admin`,
-   `regulator` — password `trialmind123`) and confirm each lands on the
-   nav/permissions appropriate to that role (Regulator especially: reads
-   work, any write attempt is blocked).
-3. **One full golden-path pass, live.** Upload a protocol → run the
-   matching agent → approve a candidate → generate an outreach draft →
-   send it → confirm it shows up correctly in the dashboard and the audit
-   trail (`/audit/runs`, `/audit/timeline/{run_id}`) — on the deployed
-   app, start to finish.
-4. **`GET <backend-url>/health`** returns `{"status": "healthy", ...}`.
 
 ## Limitations
 

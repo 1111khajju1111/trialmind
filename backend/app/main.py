@@ -7,6 +7,7 @@ from app.config import settings
 from app.rbac import READ_ONLY_ROLES, ROLES
 from app.routers import patients, regulatory, lab, approvals, trials, audit, admin, studies, dashboard, safety, compliance, interop, auth as auth_router
 from app import mock_data, auth as auth_module
+from app.demo_enrichment import seed_demo_enrichment
 
 logger = logging.getLogger("trialmind")
 logging.basicConfig(level=logging.INFO)
@@ -95,7 +96,7 @@ def on_startup():
         db = SessionLocal()
         try:
             mock_data.seed_if_empty(db)
-            mock_data.seed_additional_demo_data(db)
+            seed_demo_enrichment(db)
         finally:
             db.close()
     except Exception as e:

@@ -22,12 +22,8 @@ import app.routers.patients as patients_module
 
 
 @pytest.fixture
-def client():
-    engine = create_engine(
-        "sqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
+def client(test_engine):
+    engine = test_engine
     Base.metadata.create_all(bind=engine)
     TestSessionLocal = sessionmaker(bind=engine)
 
